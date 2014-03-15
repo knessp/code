@@ -1,5 +1,4 @@
 #include <XBee.h>
-//#include "pitches.h" hhhhheeeeeeeeeeeeeeeeeeeeeeeeyyyyyyyyyyyyyyyyyyyyyyyyy
 #define NOTE_B0  31
 #define NOTE_C1  33
 #define NOTE_CS1 35
@@ -102,11 +101,7 @@ int rowDISPLAY = 0;
 int faceDISPLAY = 0;
 int columnDISPLAY = 0;
 boolean LEDs[6][5][16];         //5 columns each have 6 faces each have 16 rows (only 15 LEDs though)
-boolean redColumn[16];
-boolean blueColumn[16];
-boolean greenColumn[16];
-boolean emptyColumn[16];
-int location[3];
+int location[3];			//for telling you where the LED ended up after you moved it. Face: 0-5. Column: 1-5. Row: 1-5. 
 /* WIRELESS STUFF: */
 XBee xbee = XBee();
 XBeeResponse response = XBeeResponse();
@@ -127,7 +122,7 @@ const int ZeroG = 13;
 const int read_accel_x = 14;
 const int read_accel_y = 15;
 const int read_accel_z = 16;
-const int read_averaging = 5000;/*determines how many readings the ADC averages before sending to cpu*/
+const int read_averaging = 5000;/*determines how many readings the ADC averages before sending to cpu*/ //doesn't seem like it works to me (Phil)
 const int read_smoothing = 10;/*determines how 'smooth' the readings are*/
 const int wiggle = 75;/*determines wiggle room in determining what side is on top */
 const int jerkwiggleneg = 50;/*determines the wiggle room for the jerk movements*/
@@ -150,9 +145,11 @@ int accel_points_taken = 0;
 int x_hysteresis = 0;
 int y_hysteresis = 0;
 int z_hysteresis = 0;
+const int Hysteresis = 45; //the step size of the accelerometer you want... (For battling jitteryness! Jitteryness is the enemy!)
+// Range is about 480 on each axis, 10 LEDs between one side and another. So Hysteresis = 48ish or 40 to 25ish seems like a good idea. 10 too low.
 
 /*GAME STUFF: */
-int GameState = -1;/*!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!*/
+int GameState = -1;
 
 void setup() {
   Serial.begin(9600);
@@ -197,30 +194,7 @@ void setup() {
     }
     columnDISPLAY++;
   }
-  
-  i = 0;
-  while(i<16){
-    emptyColumn[i] = LOW;
-    redColumn[i] = LOW;
-    blueColumn[i] = LOW;
-    greenColumn[i] = LOW;
-    i++;
-  }
-  i = 1;
-  while(i<16){
-    redColumn[i] = HIGH;
-    i=i+3;
-  }
-  i = 2;
-  while(i<16){
-    blueColumn[i] = HIGH;
-    i=i+3;
-  }
-  i = 3;
-  while(i<16){
-    greenColumn[i] = HIGH;
-    i=i+3;
-  }
+  displayLEDs(LEDs);
 }
 
 int pop(int *array){
@@ -247,71 +221,76 @@ int updateaccel(int *x, int *y, int *z){
   return 0;
 }
 
-void updateaccelOTHER(){ //adds the reading from the accelerometer to the previous readings
-	x_average_value = x_average_value + analogRead(read_accel_x);
+void updateaccelOTHER(){ //adds the reading from the accelerometer to the previous readings. Used in displayLEDs() function to always be averaging nicely.
+	x_average_value = x_average_value + analogRead(read_accel_x); //just adding it to a running score
 	y_average_value = y_average_value + analogRead(read_accel_y);
 	z_average_value = z_average_value + analogRead(read_accel_z);
-	accel_points_taken++;
+	accel_points_taken++;	//and increments the number of times it's added to the total so that it can be averaged when you want to know the average.
 }
 
-void accelAveWithHysteresis(){ //rounds the x,y,z values to the nearest ten based on previous value
+void accelAveWithHysteresis(){ //rounds-ish (it's sticky) the x,y,z values to the nearest (Hysteresis value) based on previous value
+	int tempX = x_hysteresis;
+	int tempY = y_hysteresis;
+	int tempZ = z_hysteresis;
 	if(x_hysteresis==0){	//for first time use: just round normally
-		if((x_average_value%10)<5){	//round down
-			x_hysteresis = x_average_value - (x_average_value%10);
-			y_hysteresis = y_average_value - (y_average_value%10);
-			z_hysteresis = z_average_value - (z_average_value%10);
+		if((x_average_value%Hysteresis)<(Hysteresis/2)){	//round down
+			x_hysteresis = x_average_value - (x_average_value%Hysteresis);
+			y_hysteresis = y_average_value - (y_average_value%Hysteresis);
+			z_hysteresis = z_average_value - (z_average_value%Hysteresis);
 		}else{		//round up
-			x_hysteresis = x_average_value + (10-(x_average_value%10));
-			y_hysteresis = y_average_value + (10-(y_average_value%10));
-			z_hysteresis = z_average_value + (10-(z_average_value%10));
+			x_hysteresis = x_average_value + (Hysteresis-(x_average_value%Hysteresis));
+			y_hysteresis = y_average_value + (Hysteresis-(y_average_value%Hysteresis));
+			z_hysteresis = z_average_value + (Hysteresis-(z_average_value%Hysteresis));
 		}
 	}else{		//keeps it to previous value unless it's a significant amount higher or lower
 		if(x_average_value > x_hysteresis){  // X HYSTERESIS VALUE
-			if((x_average_value - x_hysteresis)>7){ //significantly higher
-				x_hysteresis = x_hysteresis + 10;
+			if((x_average_value - x_hysteresis)>((Hysteresis/2)+(Hysteresis/4))){ //significantly higher
+				x_hysteresis = x_hysteresis + Hysteresis;
 			}
 		}else{ //smaller
-			if((x_hysteresis - x_average_value)>7){ //significantly lower
-				x_hysteresis = x_hysteresis - 10;
+			if((x_hysteresis - x_average_value)>((Hysteresis/2)+(Hysteresis/4))){ //significantly lower
+				x_hysteresis = x_hysteresis - Hysteresis;
 			}
 		}
 		if(y_average_value > y_hysteresis){  // Y HYSTERESIS VALUE
-			if((y_average_value - y_hysteresis)>7){ //significantly higher
-				y_hysteresis = y_hysteresis + 10;
+			if((y_average_value - y_hysteresis)>((Hysteresis/2)+(Hysteresis/4))){ //significantly higher
+				y_hysteresis = y_hysteresis + Hysteresis;
 			}
 		}else{ //smaller
-			if((y_hysteresis - y_average_value)>7){ //significantly lower
-				y_hysteresis = y_hysteresis - 10;
+			if((y_hysteresis - y_average_value)>((Hysteresis/2)+(Hysteresis/4))){ //significantly lower
+				y_hysteresis = y_hysteresis - Hysteresis;
 			}
 		}
 		if(z_average_value > z_hysteresis){  // Z HYSTERESIS VALUE
-			if((z_average_value - z_hysteresis)>7){ //significantly higher
-				z_hysteresis = z_hysteresis + 10;
+			if((z_average_value - z_hysteresis)>((Hysteresis/2)+(Hysteresis/4))){ //significantly higher
+				z_hysteresis = z_hysteresis + Hysteresis;
 			}
 		}else{ //smaller
-			if((z_hysteresis - z_average_value)>7){ //significantly lower
-				z_hysteresis = z_hysteresis - 10;
+			if((z_hysteresis - z_average_value)>((Hysteresis/2)+(Hysteresis/4))){ //significantly lower
+				z_hysteresis = z_hysteresis - Hysteresis;
 			}
 		} //if not significant change, don't change the hysteresis value
 			//NOTE: this assumes the values don't change by more than 18 at a time. Fix?
-	}		
-	Serial.print("X: ");
-	Serial.print(x_hysteresis);
-	Serial.print(" Y: ");
-	Serial.print(y_hysteresis);
-	Serial.print(" Z: ");
-	Serial.println(z_hysteresis);
+	}	
+	if((tempX!=x_hysteresis)||(tempY!=y_hysteresis)||(tempZ!=z_hysteresis)){ //just for testing
+		Serial.print("X hysteresis: ");
+		Serial.print(x_hysteresis);
+		Serial.print(" Y hysteresis: ");
+		Serial.print(y_hysteresis);
+		Serial.print(" Z hysteresis: ");
+		Serial.println(z_hysteresis);
+	}
 }
 
-void accelaveOTHER(){ //takes the sum of the readings and divides it by how many readings there were to get the average
-	x_average_value = x_average_value/accel_points_taken;
+void accelaveOTHER(){ //from Phil. takes the sum of the readings and divides it by how many readings there were to get the average
+	x_average_value = x_average_value/accel_points_taken; //takes the average of the running tally when called and stores it in global variable
 	y_average_value = y_average_value/accel_points_taken;
 	z_average_value = z_average_value/accel_points_taken;
 	accel_points_taken = 0;
-	accelAveWithHysteresis();
+	accelAveWithHysteresis(); //also calls hysteresis function in case you want to use hysteresis values (You Should (no jitters!))
 }
 
-void clearaccelOTHER(){
+void clearaccelOTHER(){ //from Phil. use this after accelaveOTHER to reset the averaging process
 	x_average_value = 0;
 	y_average_value = 0;
 	z_average_value = 0;
@@ -372,7 +351,7 @@ int acceljerk(int *x, int *y, int *z) {
   }
 }
 
-void displayLEDs(boolean LED[6][5][16]){
+void displayLEDs(boolean LED[6][5][16]){ //needs to be called often to display the LEDs without flickering. Use this for delay instead of delay().
 
   digitalWrite(clk,0);
   digitalWrite(sdi,LOW);
@@ -440,7 +419,7 @@ void displayLEDs(boolean LED[6][5][16]){
   }
 }
 
-void TurnOnSingleLED(int face, int column, int row, int color){//red=0,green=1,blue=2, rg=3, rb=4, gb = 5, all=6
+void TurnOnSingleLED(int face, int column, int row, int color){//red=0,green=1,blue=2, rg=3, rb=4, gb = 5, all=6. Row: 1-5. Column: 1-5. Face: 0-5.
   int row1 = (row)*3;
   int row2 = (row)*3-1;
   int row3 = (row)*3-2;
@@ -468,18 +447,18 @@ void TurnOnSingleLED(int face, int column, int row, int color){//red=0,green=1,b
   LEDs[face][column-1][row] = HIGH;
 }
 
-void TurnOffSingleLED(int face, int column, int row){
-	row = (row+1)*3;
-	LEDs[face][column][row] = LOW;
-	LEDs[face][column][row-1] = LOW;
-	LEDs[face][column][row-2] = LOW;
+void TurnOffSingleLED(int face, int column, int row){ //Row: 1-5. Column: 1-5. Face: 0-5.
+	row = (row)*3;
+	LEDs[face][column-1][row] = LOW;
+	LEDs[face][column-1][row-1] = LOW;
+	LEDs[face][column-1][row-2] = LOW;
 }
 
-void TurnOnRow(int face, int row, int color){//red=0,green=1,blue=2
-  int row1 = (row+1)*3;
-  int row2 = (row+1)*3-1;
-  int row3 = (row+1)*3-2;
-  row = (row+1)*3-color;
+void TurnOnRow(int face, int row, int color){//red=0,green=1,blue=2. Row: 1-5. Face: 0-5.
+  int row1 = (row)*3;
+  int row2 = (row)*3-1;
+  int row3 = (row)*3-2;
+  row = (row)*3-color;
   int column = 0;
   while(column<5){
     LEDs[face][column][row1] = LOW;
@@ -490,10 +469,10 @@ void TurnOnRow(int face, int row, int color){//red=0,green=1,blue=2
   }
 }
 
-void TurnOffRow(int face, int row){
-  int row1 = (row+1)*3;
-  int row2 = (row+1)*3-1;
-  int row3 = (row+1)*3-2;
+void TurnOffRow(int face, int row){ // Row: 1-5. Face: 0-5.
+  int row1 = (row)*3;
+  int row2 = (row)*3-1;
+  int row3 = (row)*3-2;
   int column = 0;
   while(column<5){
     LEDs[face][column][row1] = LOW;
@@ -503,33 +482,33 @@ void TurnOffRow(int face, int row){
   }
 }
 
-void TurnOnColumn(int face, int column, int color){//red=0,green=1,blue=2
+void TurnOnColumn(int face, int column, int color){//red=0,green=1,blue=2. Column: 1-5. Face: 0-5.
   int row = 0;
   while(row<16){
-    LEDs[face][column][row] = LOW;
+    LEDs[face][column-1][row] = LOW;
     row++;
   }
   row = 3-color;
-  LEDs[face][column][row] = HIGH;
+  LEDs[face][column-1][row] = HIGH;
   row = row+3;
-  LEDs[face][column][row] = HIGH;
+  LEDs[face][column-1][row] = HIGH;
   row = row+3;
-  LEDs[face][column][row] = HIGH;
+  LEDs[face][column-1][row] = HIGH;
   row = row+3;
-  LEDs[face][column][row] = HIGH;
+  LEDs[face][column-1][row] = HIGH;
   row = row+3;
-  LEDs[face][column][row] = HIGH;
+  LEDs[face][column-1][row] = HIGH;
 }
 
-void TurnOffColumn(int face, int column){
+void TurnOffColumn(int face, int column){// Column: 1-5. Face: 0-5.
 	int row = 0;
 	while(row<16){
-		LEDs[face][column][row] = LOW;
+		LEDs[face][column-1][row] = LOW;
 		row++;
 	}
 }
 
-void TurnOnFace(int face, int color){//red=0,green=1,blue=2, rg=3, rb=4, gb = 5, all=6
+void TurnOnFace(int face, int color){//red=0,green=1,blue=2, rg=3, rb=4, gb = 5, all=6. Face: 0-5.
 	int icolumn = 1;
 	int irow = 1;
 	while(icolumn<6){
@@ -678,112 +657,28 @@ void ShowOff(){
    
 }
 
-int CountShowOffAccel = 0;
-void ShowOffAccel(){
-  CountShowOffAccel++;
-  int row = 1;
-  int column = 1;
-  int color = 0;
-  //int AccelOffSet = (analogRead(read_accel_x) + analogRead(read_accel_y))/100;
-  accelaveOTHER();
-  int AccelOffSet = (x_hysteresis)/50;
-  //Serial.println(x_average_value);
-  clearaccelOTHER();
-  //Serial.println(AccelOffSet);
-  // if(CountShowOffAccel<10){
-    while(column<6){
-      row = 1;
-      while(row<6){
-        color = ((column+row+AccelOffSet)%6);
-        TurnOnSingleLED(5,column,row,color);
-        TurnOnSingleLED(4,column,row,color);
-        TurnOnSingleLED(3,column,row,color);
-        TurnOnSingleLED(2,column,row,color);
-        TurnOnSingleLED(1,column,row,color);
-        TurnOnSingleLED(0,column,row,color);
-        row++;
-      }
-      column++;
-    }
-  // }else if(CountShowOffAccel>9 && CountShowOffAccel<20){
-    // while(column<6){
-      // row = 1;
-      // while(row<6){
-        // color = ((column+row+AccelOffSet+1)%6);
-        // TurnOnSingleLED(5,column,row,color);
-        // TurnOnSingleLED(4,column,row,color);
-        // TurnOnSingleLED(3,column,row,color);
-        // TurnOnSingleLED(2,column,row,color);
-        // TurnOnSingleLED(1,column,row,color);
-        // TurnOnSingleLED(0,column,row,color);
-        // row++;
-      // }
-      // column++;
-    // }
-  // }else if(CountShowOffAccel>19 && CountShowOffAccel<30){
-    // while(column<6){
-      // row = 1;
-      // while(row<6){
-        // color = ((column+row+AccelOffSet+2)%6);
-        // TurnOnSingleLED(5,column,row,color);
-        // TurnOnSingleLED(4,column,row,color);
-        // TurnOnSingleLED(3,column,row,color);
-        // TurnOnSingleLED(2,column,row,color);
-        // TurnOnSingleLED(1,column,row,color);
-        // TurnOnSingleLED(0,column,row,color);
-        // row++;
-      // }
-      // column++;
-    // }
-  // }else if(CountShowOffAccel>29 && CountShowOffAccel<40){
-    // while(column<6){
-      // row = 1;
-      // while(row<6){
-        // color = ((column+row+AccelOffSet+3)%6);
-        // TurnOnSingleLED(5,column,row,color);
-        // TurnOnSingleLED(4,column,row,color);
-        // TurnOnSingleLED(3,column,row,color);
-        // TurnOnSingleLED(2,column,row,color);
-        // TurnOnSingleLED(1,column,row,color);
-        // TurnOnSingleLED(0,column,row,color);
-        // row++;
-      // }
-      // column++;
-    // }
-  // }else if(CountShowOffAccel>39 && CountShowOffAccel<50){
-    // while(column<6){
-      // row = 1;
-      // while(row<6){
-        // color = ((column+row+AccelOffSet+4)%6);
-        // TurnOnSingleLED(5,column,row,color);
-        // TurnOnSingleLED(4,column,row,color);
-        // TurnOnSingleLED(3,column,row,color);
-        // TurnOnSingleLED(2,column,row,color);
-        // TurnOnSingleLED(1,column,row,color);
-        // TurnOnSingleLED(0,column,row,color);
-        // row++;
-      // }
-      // column++;
-    // }
-  // }else if(CountShowOffAccel>49 && CountShowOffAccel<60){
-      // while(column<6){
-      // row = 1;
-      // while(row<6){
-        // color = ((column+row+AccelOffSet+5)%6);
-        // TurnOnSingleLED(5,column,row,color);
-        // TurnOnSingleLED(4,column,row,color);
-        // TurnOnSingleLED(3,column,row,color);
-        // TurnOnSingleLED(2,column,row,color);
-        // TurnOnSingleLED(1,column,row,color);
-        // TurnOnSingleLED(0,column,row,color);
-        // row++;
-      // }
-      // column++;
-    // }
-  // }else if(CountShowOffAccel>59){
-    // CountShowOffAccel = 0;
-  // }
-   
+void ShowOffAccel(){ //kinda lame but shows accel working well
+	int row = 1;
+	int column = 1;
+	int color = 0;
+	accelaveOTHER();
+	int AccelOffSet = z_hysteresis/50; //can do any axis
+	clearaccelOTHER();
+	//Serial.println(AccelOffSet);
+	while(column<6){
+		row = 1;
+		while(row<6){
+			color = ((column+row+AccelOffSet)%6);
+			TurnOnSingleLED(5,column,row,color);
+			TurnOnSingleLED(4,column,row,color);
+			TurnOnSingleLED(3,column,row,color);
+			TurnOnSingleLED(2,column,row,color);
+			TurnOnSingleLED(1,column,row,color);
+			TurnOnSingleLED(0,column,row,color);
+			row++;
+		}
+		column++;
+	}
 }
 
 int CountRandoCube = 0;
@@ -836,7 +731,7 @@ void RandoFace(int face){
 	CountRandoFace++;
 }
 
-void WhiteColor(){
+void WhiteColor(){ //just for experimenting
 	t = 500;
 	int icolumn = 1;
 	int irow = 1;
@@ -872,7 +767,7 @@ void WhiteColor(){
 	t = 1500;
 }
 
-void MoveLED(int face, int column, int row, int movePitch, int moveYaw, int moveRoll){ 
+void MoveLED(int face, int column, int row, int movePitch, int moveYaw, int moveRoll){ //WORKS NOW (i'm pretty sure)!! Row: 1-5. Column: 1-5. Face: 0-5.
 	int color=6;
 	int tempRow = row*3;
 	if(LEDs[face][column-1][tempRow]){
@@ -891,49 +786,49 @@ void MoveLED(int face, int column, int row, int movePitch, int moveYaw, int move
 	}else if(LEDs[face][column-1][tempRow] && LEDs[face][column-1][tempRow-1] && LEDs[face][column-1][tempRow-2]){
 		color = 6;
 	}
-	if(face == 5){ //+column is +Roll, +row is +Pitch
+	if(face == 5){ //+column is -Roll, +row is -Pitch
 		TurnOffSingleLED(face, column, row);
-		if(column+moveRoll>5){
+		if(column-moveRoll>5){
 			face = 1;
-			moveRoll = (column+moveRoll)-6;
+			moveRoll = (column-moveRoll)-6;
 			column = -(row-6);
-			row = 5;
+			row = 1;
 			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
 		}else if(row-movePitch>5){
-			face = 2;
+			face = 4;
 			movePitch = (row-movePitch)-6;
 			row = -(column-6);
 			column = 1;
 			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
 		}
-		if(column+moveRoll<1){
+		if(column-moveRoll<1){
 			face = 3;
-			moveRoll = column+moveRoll;
-			column = row;
-			row = 1;
+			moveRoll = column-moveRoll;
+			column = 6-row;
+			row = 5;
 			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
 		}else if(row-movePitch<1){
-			face = 4;
+			face = 2;
 			movePitch = row-movePitch;
 			row = column;
 			column = 1;
 			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
 		}
-		TurnOnSingleLED(face, column+moveRoll, row+movePitch, color);
-                location[0] = face;
-                location[1] = column+moveRoll;
-                location[2] = row+movePitch;                
-	}else if(face == 4){ //+column is -Pitch, +row is +Yaw
+		TurnOnSingleLED(face, column-moveRoll, row-movePitch, color);
+                location[0] = face; //for telling you where the LED ended up after you moved it
+                location[1] = column-moveRoll;
+                location[2] = row-movePitch;                
+	}else if(face == 4){ //+column is -Pitch, +row is -Yaw
 		TurnOffSingleLED(face, column, row);
 		if(column-movePitch>5){
 			face = 0;
 			movePitch = (column-movePitch)-6;
-			column = -(row-6);
-			row = 1;
+			column = 5;
+			row = 6-row;
 			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
-		}else if(row+moveYaw>5){
-			face = 1;
-			moveYaw = (row+moveYaw)-6;
+		}else if(row-moveYaw>5){
+			face = 3;
+			moveYaw = (row-moveYaw)-6;
 			row = -(column-6);
 			column = 1;
 			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
@@ -941,63 +836,63 @@ void MoveLED(int face, int column, int row, int movePitch, int moveYaw, int move
 		if(column-movePitch<1){
 			face = 5;
 			movePitch = column-movePitch;
-			column = row;
+			column = 6-row;
 			row = 5;
 			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
-		}else if(row+moveYaw<1){
-			face = 3;
-			moveYaw = row+moveYaw;
+		}else if(row-moveYaw<1){	 
+			face = 1;
+			moveYaw = row-moveYaw;
 			row = column;
 			column = 1;
 			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
 		}
-		TurnOnSingleLED(face, column-movePitch, row+moveYaw, color);
+		TurnOnSingleLED(face, column-movePitch, row-moveYaw, color);	
                 location[0] = face;
                 location[1] = column-movePitch;
-                location[2] = row+moveYaw;       
+                location[2] = row-moveYaw;       
 	}else if(face == 3){ //+column is -Yaw, +row is -Roll
 		TurnOffSingleLED(face, column, row);
 		if(column-moveYaw>5){
 			face = 2;
 			moveYaw = (column-moveYaw)-6;
-			column = row;
-			row = 5;
+			column = 6-row;
+			row = 1;
 			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
 		}else if(row-moveRoll>5){
-			face = 0;
+			face = 5;
 			moveRoll = (row-moveRoll)-6;
-			row = column;
-			column = 5;
+			row = 6-column;
+			column = 1;
 			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
 		}
 		if(column-moveYaw<1){
 			face = 4;
 			moveYaw = column-moveYaw;
-			column = row;
-			row = 1;
+			column = 6-row;
+			row = 5;	 
 			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
 		}else if(row-moveRoll<1){
-			face = 5;
+			face = 0;
 			moveRoll = row-moveRoll;
-			row = column;
-			column = 1;
+			row = 1;
+			column = 6-column;
 			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
 		}
 		TurnOnSingleLED(face, column-moveYaw, row-moveRoll, color);
                 location[0] = face;
                 location[1] = column-moveYaw;
                 location[2] = row-moveRoll;       
-	}else if(face == 2){ //+column is +Pitch, +row is +Yaw
+	}else if(face == 2){ //+column is +Pitch, +row is -Yaw	 
 		TurnOffSingleLED(face, column, row);
 		if(column+movePitch>5){
 			face = 0;
 			movePitch = (column+movePitch)-6;
-			column = row;
-			row = 1;
+			column = 1;
+			row = row;
 			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
-		}else if(row+moveYaw>5){
-			face = 3;
-			moveYaw = (row+moveYaw)-6;
+		}else if(row-moveYaw>5){
+			face = 1;
+			moveYaw = (row-moveYaw)-6;
 			row = column;
 			column = 5;
 			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
@@ -1005,84 +900,84 @@ void MoveLED(int face, int column, int row, int movePitch, int moveYaw, int move
 		if(column+movePitch<1){
 			face = 5;
 			movePitch = column+movePitch;
-			column = -(row-6);
-			row = 5;
+			column = row;
+			row = 1;
 			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
-		}else if(row+moveYaw<1){
-			face = 1;
-			moveYaw = row+moveYaw;
+		}else if(row-moveYaw<1){
+			face = 3;
+			moveYaw = row-moveYaw;
 			row = -(column-6);
 			column = 5;
 			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
 		}
-		TurnOnSingleLED(face, column+movePitch, row+moveYaw, color);
+		TurnOnSingleLED(face, column+movePitch, row-moveYaw, color);
                 location[0] = face;
                 location[1] = column+movePitch;
-                location[2] = row+moveYaw;       
+                location[2] = row-moveYaw;       
 	}else if(face == 1){ //+column is +Yaw, +row is -Roll
 		TurnOffSingleLED(face, column, row);
 		if(column+moveYaw>5){
 			face = 2;
 			moveYaw = (column+moveYaw)-6;
-			column = -(row-6);
-			row = 1;
+			column = row;
+			row = 5; 	 
 			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
 		}else if(row-moveRoll>5){
-			face = 5;
+			face = 0;
 			moveRoll = (row-moveRoll)-6;
-			row = column;
-			column = 5;
+			row = 5;
+			column = 6-column;
 			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
 		}
 		if(column+moveYaw<1){
 			face = 4;
 			moveYaw = column+moveYaw;
-			column = -(row-6);
-			row = 5;
+			column = row;
+			row = 1;
 			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
 		}else if(row-moveRoll<1){
-			face = 0;
+			face = 5;
 			moveRoll = row-moveRoll;
-			row = column;
-			column = 1;
+			row = 6-column;
+			column = 5;
 			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
 		}
 		TurnOnSingleLED(face, column+moveYaw, row-moveRoll, color);
                 location[0] = face;
                 location[1] = column+moveYaw;
                 location[2] = row-moveRoll;       
-	}else if(face == 0){ //+column is +Roll, +row is -Pitch
+	}else if(face == 0){ //+column is +Pitch, +row is +Roll 	
 		TurnOffSingleLED(face, column, row);
-		if(column+moveRoll>5){
-			face = 3;
-			moveRoll = (column+moveRoll)-6;
-			column = row;
-			row = 5;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
-		}else if(row-movePitch>5){
-			face = 2;
-			movePitch = (row-movePitch)-6;
-			row = column;
-			column = 5;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
-		}
-		if(column+moveRoll<1){
-			face = 1;
-			moveRoll = column+moveRoll;
-			column = row;
-			row = 1;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
-		}else if(row-movePitch<1){
+		if(column+movePitch>5){
 			face = 4;
-			movePitch = row-movePitch;
-			row = -(column-6);
+			movePitch = (column+movePitch)-6;
 			column = 5;
+			row = 6-row;
+			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+		}else if(row+moveRoll>5){
+			face = 1;
+			moveRoll = (row+moveRoll)-6;
+			row = 5;
+			column = 6-column;
 			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
 		}
-		TurnOnSingleLED(face, column+moveRoll, row-movePitch, color);
+		if(column+movePitch<1){
+			face = 2;
+			movePitch = column+movePitch;
+			column = 5;
+			row = row;
+			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+		}else if(row+moveRoll<1){
+			face = 3;
+			moveRoll = row+moveRoll;
+			row = 1;
+			column = 6-column;
+			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+		}
+		TurnOnSingleLED(face, column+movePitch, row+moveRoll, color);
                 location[0] = face;
-                location[1] = column+moveRoll;
-                location[2] = row-movePitch;       
+                location[1] = column+movePitch;
+                location[2] = row+moveRoll;       
 	}
 } 
 
@@ -1134,33 +1029,20 @@ void displayReceivedLEDs(boolean LED[6][5][16]){
 }
 
 void StartUp(){
-  int xLED;
-  columnDISPLAY = 0;
-  while(columnDISPLAY<5){
-   rowDISPLAY = 0;
-   while(rowDISPLAY<16){      //for turning one LED on at a time then after displaying for a while, switch to next LED
-      if(rowDISPLAY%3==1){ //turn on green LEDs
-        xLED=1;
-      }else{
-        xLED=0;
-      }
-      LEDs[5][columnDISPLAY][rowDISPLAY]=xLED;
-      LEDs[4][columnDISPLAY][rowDISPLAY]=xLED;
-      LEDs[3][columnDISPLAY][rowDISPLAY]=xLED;
-      LEDs[2][columnDISPLAY][rowDISPLAY]=xLED;
-      LEDs[1][columnDISPLAY][rowDISPLAY]=xLED;
-      LEDs[0][columnDISPLAY][rowDISPLAY]=xLED;
-      rowDISPLAY++;
-   }
-   columnDISPLAY++;
+  //for the future can do a starting up sequence
+  int i = 0;
+  while(i<100){
+	ShowOff();
+	displayLEDs(LEDs);
+	i++;
   }
   //SOUND CODE
-  //import from Conrad
+  //import from Conrad?
 }
 
-void SelectGame(){ //used at the after starting up for starting a game
+void SelectGame(){ //used after starting up for starting a game
 	//updateaccel(x,y,z);
-	//StartUp();
+	StartUp();
 	columnDISPLAY = 0;
 	while(columnDISPLAY<5){
 		rowDISPLAY = 0;
@@ -1179,25 +1061,25 @@ void SelectGame(){ //used at the after starting up for starting a game
 	TurnOnSingleLED(0,3,3,2);
 	TurnOnSingleLED(0,3,4,2);
 	TurnOnSingleLED(0,3,5,2);
-	TurnOnSingleLED(4,2,1,2);//front face show #2
-	TurnOnSingleLED(4,3,1,2);
-	TurnOnSingleLED(4,4,1,2);
-	TurnOnSingleLED(4,4,2,2);
-	TurnOnSingleLED(4,4,3,2);
-	TurnOnSingleLED(4,3,3,2);
-	TurnOnSingleLED(4,2,3,2);
+	TurnOnSingleLED(4,1,2,2);//front face show #2
+	TurnOnSingleLED(4,1,3,2);
+	TurnOnSingleLED(4,1,4,2);
 	TurnOnSingleLED(4,2,4,2);
-	TurnOnSingleLED(4,2,5,2);
-	TurnOnSingleLED(4,3,5,2);
-	TurnOnSingleLED(4,4,5,2);
+	TurnOnSingleLED(4,3,2,2);
+	TurnOnSingleLED(4,3,3,2);
+	TurnOnSingleLED(4,3,4,2);
+	TurnOnSingleLED(4,4,2,2);
+	TurnOnSingleLED(4,5,4,2);
+	TurnOnSingleLED(4,5,3,2);
+	TurnOnSingleLED(4,5,2,2);
 	TurnOnSingleLED(3,2,1,2);//front face show #3
 	TurnOnSingleLED(3,3,1,2);
 	TurnOnSingleLED(3,4,1,2);
-	TurnOnSingleLED(3,4,2,2);
+	TurnOnSingleLED(3,2,2,2);
 	TurnOnSingleLED(3,4,3,2);
 	TurnOnSingleLED(3,3,3,2);
 	TurnOnSingleLED(3,2,3,2);
-	TurnOnSingleLED(3,4,4,2);
+	TurnOnSingleLED(3,2,4,2);
 	TurnOnSingleLED(3,4,5,2);
 	TurnOnSingleLED(3,3,5,2);
 	TurnOnSingleLED(3,2,5,2);
@@ -1238,7 +1120,6 @@ void SelectGame(){ //used at the after starting up for starting a game
 		}
 		displayLEDs(LEDs);
 		Serial.println(GameState);
-	
 }
 
 void StartGame1(){ //navigate your blue guy across the cube, don't hit the rails, eat all the apples
@@ -1565,11 +1446,6 @@ void DisplayGame3(){
         }
 }
 
-int topFace(){
-  //import Kents code
-  return 0;
-}
-
 void Game3(){
 	updateaccel(x,y,z);
         int i = 0;
@@ -1596,7 +1472,7 @@ void Game3(){
         TurnOnColumn(i,2,2);
         TurnOnColumn(i,3,2);
         TurnOnColumn(i,4,2);
-        TurnOnColumn(i,0,2);
+        TurnOnColumn(i,5,2);
         while(acceltop(x,y,z)!=i){
           displayLEDs(LEDs);
         }
@@ -1772,41 +1648,7 @@ int idle(){
 		columnDISPLAY++;
 	}
 	if(acceljerk(x,y,z)==1){
-		TurnOnSingleLED(0,3,1,2);//top face show #1
-		TurnOnSingleLED(0,3,2,2);
-		TurnOnSingleLED(0,3,3,2);
-		TurnOnSingleLED(0,3,4,2);
-		TurnOnSingleLED(0,3,5,2);
-		TurnOnSingleLED(4,2,1,2);//front face show #2
-		TurnOnSingleLED(4,3,1,2);
-		TurnOnSingleLED(4,4,1,2);
-		TurnOnSingleLED(4,4,2,2);
-		TurnOnSingleLED(4,4,3,2);
-		TurnOnSingleLED(4,3,3,2);
-		TurnOnSingleLED(4,2,3,2);
-		TurnOnSingleLED(4,2,4,2);
-		TurnOnSingleLED(4,2,5,2);
-		TurnOnSingleLED(4,3,5,2);
-		TurnOnSingleLED(4,4,5,2);
-		TurnOnSingleLED(3,2,1,2);//front face show #3
-		TurnOnSingleLED(3,3,1,2);
-		TurnOnSingleLED(3,4,1,2);
-		TurnOnSingleLED(3,4,2,2);
-		TurnOnSingleLED(3,4,3,2);
-		TurnOnSingleLED(3,3,3,2);
-		TurnOnSingleLED(3,2,3,2);
-		TurnOnSingleLED(3,4,4,2);
-		TurnOnSingleLED(3,4,5,2);
-		TurnOnSingleLED(3,3,5,2);
-		TurnOnSingleLED(3,2,5,2);	
-		displayLEDs(LEDs);
-		while(i<300){
-			displayLEDs(LEDs);
-			i++;
-		}
-			
 		return 0;
-		
 	}else{
 		return -1;
 	}
@@ -1821,13 +1663,13 @@ int loc0 = 0;
 int TestCount = 0;
 //GameState = 20;
 void loop() {
-	while(1){
-		ShowOffAccel();
-		displayLEDs(LEDs);
-	}
-	int i = 0;
+	// while(1){
+		// ShowOffAccel();
+		// displayLEDs(LEDs);
+	// }
 	
-	if(GameState == -1){   
+	displayLEDs(LEDs);
+	while(GameState == -1){   
 		GameState = idle();
 	}
 	if(GameState == 0){   
@@ -1840,7 +1682,25 @@ void loop() {
 	}else if(GameState == 30){
 		Game3();
 	}
-	//Serial.println("hey");
-	displayLEDs(LEDs);
 	
+	// Serial.println("hey");
+	
+	//For testing MoveLED():
+	// location[0] = 3; //face
+	// location[1] = 1; //column
+	// location[2] = 3; //row
+	// TurnOnSingleLED(location[0], location[1], location[2], 1);
+	// int i = 0;
+	// while(i<40){
+		// displayLEDs(LEDs);
+		// i++;
+	// }
+	// while(1){
+		// MoveLED(location[0], location[1], location[2], 0, 0, -1);
+		// i = 0;
+		// while(i<40){
+			// displayLEDs(LEDs);
+			// i++;
+		// }
+	// }
 }
