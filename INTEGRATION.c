@@ -101,7 +101,6 @@ int rowDISPLAY = 0;
 int faceDISPLAY = 0;
 int columnDISPLAY = 0;
 boolean LEDs[6][5][16];         //5 columns each have 6 faces each have 16 rows (only 15 LEDs though)
-int location[3];			//for telling you where the LED ended up after you moved it. Face: 0-5. Column: 1-5. Row: 1-5. 
 /* WIRELESS STUFF: */
 XBee xbee = XBee();
 XBeeResponse response = XBeeResponse();
@@ -176,9 +175,6 @@ void setup() {
   pinMode(le, OUTPUT);
   pinMode(sdi, OUTPUT);
   pinMode(clk, OUTPUT);
-  location[0] = 4;
-  location[1] = 3;
-  location[2] = 3;
   int i;
   columnDISPLAY = 0;
   while(columnDISPLAY<5){
@@ -413,38 +409,46 @@ void displayLEDs(boolean LED[6][5][16]){ //needs to be called often to display t
      delayMicroseconds(t);        //keep the column on for a little while
      digitalWrite(Mosfet[columnDISPLAY], 1);  //then turn the mosfet off so we can move to the next column
      updateaccelOTHER();     								/*KENT YOU CAN CHANGE THIS TO PUSH AND POP*/
-	 delayMicroseconds(10);
+	 delayMicroseconds(1);
      updateaccelOTHER();     								/*KENT YOU CAN CHANGE THIS TO PUSH AND POP*/
 	 columnDISPLAY++;                         //move to the next column
   }
 }
 
 void TurnOnSingleLED(int face, int column, int row, int color){//red=0,green=1,blue=2, rg=3, rb=4, gb = 5, all=6. Row: 1-5. Column: 1-5. Face: 0-5.
-  int row1 = (row)*3;
-  int row2 = (row)*3-1;
-  int row3 = (row)*3-2;
-  boolean combos1 = LOW;
-  boolean combos2 = LOW;
-  boolean combos3 = LOW;
-  if(color == 3){
-    color = 0;
-    combos2 = HIGH;
-  }else if(color == 4){
-    color = 0;
-    combos3 = HIGH;
-  }else if(color == 5){
-    color = 1;
-    combos3 = HIGH;
-  }else if(color == 6){
-    color = 0;
-    combos2 = HIGH;
-    combos3 = HIGH;
-  }
-  row = (row)*3-color;
-  LEDs[face][column-1][row1] = combos1;
-  LEDs[face][column-1][row2] = combos2;
-  LEDs[face][column-1][row3] = combos3;
-  LEDs[face][column-1][row] = HIGH;
+	int row1 = (row)*3;
+	int row2 = (row)*3-1;
+	int row3 = (row)*3-2;
+	row = (row)*3-color;
+	if(color == 0){
+		LEDs[face][column-1][row] = HIGH;
+		LEDs[face][column-1][row2] = LOW;
+		LEDs[face][column-1][row3] = LOW;
+	}else if(color == 1){
+		LEDs[face][column-1][row] = HIGH;
+		LEDs[face][column-1][row1] = LOW;
+		LEDs[face][column-1][row3] = LOW;
+	}else if(color == 2){
+		LEDs[face][column-1][row] = HIGH;
+		LEDs[face][column-1][row2] = LOW;
+		LEDs[face][column-1][row1] = LOW;
+	}else if(color == 3){
+		LEDs[face][column-1][row1] = HIGH;
+		LEDs[face][column-1][row2] = HIGH;
+		LEDs[face][column-1][row3] = LOW;
+	}else if(color == 4){
+		LEDs[face][column-1][row1] = HIGH;
+		LEDs[face][column-1][row2] = LOW;
+		LEDs[face][column-1][row3] = HIGH;
+	}else if(color == 5){
+		LEDs[face][column-1][row1] = LOW;
+		LEDs[face][column-1][row2] = HIGH;
+		LEDs[face][column-1][row3] = HIGH;
+	}else if(color == 6){
+		LEDs[face][column-1][row1] = HIGH;
+		LEDs[face][column-1][row2] = HIGH;
+		LEDs[face][column-1][row3] = HIGH;
+	}
 }
 
 void TurnOffSingleLED(int face, int column, int row){ //Row: 1-5. Column: 1-5. Face: 0-5.
@@ -767,14 +771,38 @@ void WhiteColor(){ //just for experimenting
 	t = 1500;
 }
 
-void MoveLED(int face, int column, int row, int movePitch, int moveYaw, int moveRoll){ //WORKS NOW (i'm pretty sure)!! Row: 1-5. Column: 1-5. Face: 0-5.
-	int color=6;
+void MoveLED(int location[], int movePitch, int moveYaw, int moveRoll){ //WORKS NOW (i'm pretty sure)!! Row: 1-5. Column: 1-5. Face: 0-5.
+	int face = location[0];
+	int column = location[1];
+	int row = location[2];
+	if(movePitch!=0&&moveYaw!=0){
+		MoveLED(location,movePitch,0,moveRoll);
+		movePitch = 0;
+		face = location[0];
+		column = location[1];
+		row = location[2];
+	}
+	if(movePitch!=0&&moveRoll!=0){
+		MoveLED(location, movePitch,moveYaw,0);
+		movePitch = 0;
+		face = location[0];
+		column = location[1];
+		row = location[2];
+	}
+	if(moveYaw!=0&&moveRoll!=0){
+		MoveLED(location, movePitch,moveYaw,0);
+		moveYaw = 0;
+		face = location[0];
+		column = location[1];
+		row = location[2];
+	}
+	int color=7;
 	int tempRow = row*3;
-	if(LEDs[face][column-1][tempRow]){
+	if(LEDs[face][column-1][tempRow]==1){
 		color = 0;
-	}else if(LEDs[face][column-1][tempRow-1]){
+	}else if(LEDs[face][column-1][tempRow-1]==1){
 		color = 1;
-	}else if(LEDs[face][column-1][tempRow-2]){
+	}else if(LEDs[face][column-1][tempRow-2]==1){
 		color = 2;
 	}
 	if(LEDs[face][column-1][tempRow] && LEDs[face][column-1][tempRow-1]){
@@ -786,6 +814,10 @@ void MoveLED(int face, int column, int row, int movePitch, int moveYaw, int move
 	}else if(LEDs[face][column-1][tempRow] && LEDs[face][column-1][tempRow-1] && LEDs[face][column-1][tempRow-2]){
 		color = 6;
 	}
+	if(color==7){
+		Serial.println("hey! color=7, moveLED");
+		color = 0;
+	}
 	if(face == 5){ //+column is -Roll, +row is -Pitch
 		TurnOffSingleLED(face, column, row);
 		if(column-moveRoll>5){
@@ -793,26 +825,42 @@ void MoveLED(int face, int column, int row, int movePitch, int moveYaw, int move
 			moveRoll = (column-moveRoll)-6;
 			column = -(row-6);
 			row = 1;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}else if(row-movePitch>5){
 			face = 4;
 			movePitch = (row-movePitch)-6;
 			row = -(column-6);
 			column = 1;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}
 		if(column-moveRoll<1){
 			face = 3;
 			moveRoll = column-moveRoll;
 			column = 6-row;
 			row = 5;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}else if(row-movePitch<1){
 			face = 2;
 			movePitch = row-movePitch;
 			row = column;
 			column = 1;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}
 		TurnOnSingleLED(face, column-moveRoll, row-movePitch, color);
                 location[0] = face; //for telling you where the LED ended up after you moved it
@@ -825,26 +873,42 @@ void MoveLED(int face, int column, int row, int movePitch, int moveYaw, int move
 			movePitch = (column-movePitch)-6;
 			column = 5;
 			row = 6-row;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}else if(row-moveYaw>5){
 			face = 3;
 			moveYaw = (row-moveYaw)-6;
 			row = -(column-6);
 			column = 1;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}
 		if(column-movePitch<1){
 			face = 5;
 			movePitch = column-movePitch;
 			column = 6-row;
 			row = 5;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}else if(row-moveYaw<1){	 
 			face = 1;
 			moveYaw = row-moveYaw;
 			row = column;
 			column = 1;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}
 		TurnOnSingleLED(face, column-movePitch, row-moveYaw, color);	
                 location[0] = face;
@@ -857,26 +921,42 @@ void MoveLED(int face, int column, int row, int movePitch, int moveYaw, int move
 			moveYaw = (column-moveYaw)-6;
 			column = 6-row;
 			row = 1;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}else if(row-moveRoll>5){
 			face = 5;
 			moveRoll = (row-moveRoll)-6;
 			row = 6-column;
 			column = 1;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}
 		if(column-moveYaw<1){
 			face = 4;
 			moveYaw = column-moveYaw;
 			column = 6-row;
 			row = 5;	 
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}else if(row-moveRoll<1){
 			face = 0;
 			moveRoll = row-moveRoll;
 			row = 1;
 			column = 6-column;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}
 		TurnOnSingleLED(face, column-moveYaw, row-moveRoll, color);
                 location[0] = face;
@@ -889,26 +969,42 @@ void MoveLED(int face, int column, int row, int movePitch, int moveYaw, int move
 			movePitch = (column+movePitch)-6;
 			column = 1;
 			row = row;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}else if(row-moveYaw>5){
 			face = 1;
 			moveYaw = (row-moveYaw)-6;
 			row = column;
 			column = 5;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}
 		if(column+movePitch<1){
 			face = 5;
 			movePitch = column+movePitch;
 			column = row;
 			row = 1;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}else if(row-moveYaw<1){
 			face = 3;
 			moveYaw = row-moveYaw;
 			row = -(column-6);
 			column = 5;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}
 		TurnOnSingleLED(face, column+movePitch, row-moveYaw, color);
                 location[0] = face;
@@ -921,26 +1017,42 @@ void MoveLED(int face, int column, int row, int movePitch, int moveYaw, int move
 			moveYaw = (column+moveYaw)-6;
 			column = row;
 			row = 5; 	 
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}else if(row-moveRoll>5){
 			face = 0;
 			moveRoll = (row-moveRoll)-6;
 			row = 5;
 			column = 6-column;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}
 		if(column+moveYaw<1){
 			face = 4;
 			moveYaw = column+moveYaw;
 			column = row;
 			row = 1;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}else if(row-moveRoll<1){
 			face = 5;
 			moveRoll = row-moveRoll;
 			row = 6-column;
 			column = 5;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}
 		TurnOnSingleLED(face, column+moveYaw, row-moveRoll, color);
                 location[0] = face;
@@ -953,26 +1065,42 @@ void MoveLED(int face, int column, int row, int movePitch, int moveYaw, int move
 			movePitch = (column+movePitch)-6;
 			column = 5;
 			row = 6-row;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}else if(row+moveRoll>5){
 			face = 1;
 			moveRoll = (row+moveRoll)-6;
 			row = 5;
 			column = 6-column;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}
 		if(column+movePitch<1){
 			face = 2;
 			movePitch = column+movePitch;
 			column = 5;
 			row = row;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}else if(row+moveRoll<1){
 			face = 3;
 			moveRoll = row+moveRoll;
 			row = 1;
 			column = 6-column;
-			MoveLED(face, column, row, movePitch, moveYaw, moveRoll);
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			MoveLED(location, movePitch, moveYaw, moveRoll);
 		}
 		TurnOnSingleLED(face, column+movePitch, row+moveRoll, color);
                 location[0] = face;
@@ -980,6 +1108,10 @@ void MoveLED(int face, int column, int row, int movePitch, int moveYaw, int move
                 location[2] = row+moveRoll;       
 	}
 } 
+
+void MoveBlock(int locations[], int blockSize, int movePitch, int moveYaw, int moveRoll){//locations contains the face, column, row information of all the LEDs that need moved
+	//doesn't work yet
+}
 
 void translateReceivedLED(int rowReceived, int colorReceived, int indexReceived){
   int faceReceived = indexReceived/5; //index 0-4 is face 0, index 25-29 is face 5
@@ -1656,19 +1788,14 @@ int idle(){
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//int xLED = 0;
-int yLED = 0;
-int loc0 = 0;
 
-int TestCount = 0;
-//GameState = 20;
+
 void loop() {
 	// while(1){
 		// ShowOffAccel();
 		// displayLEDs(LEDs);
 	// }
-	
-	displayLEDs(LEDs);
+  
 	while(GameState == -1){   
 		GameState = idle();
 	}
@@ -1678,7 +1805,7 @@ void loop() {
 	if(GameState == 10){
 		Game1();
 	}else if(GameState == 20){
-		Game2();
+		Game2();22
 	}else if(GameState == 30){
 		Game3();
 	}
@@ -1686,21 +1813,43 @@ void loop() {
 	// Serial.println("hey");
 	
 	//For testing MoveLED():
+	//TurnOnCubeLED(1);
+	// int locations[] = {3,3,3,3,3,4,3,3,2,3,4,3};
+	// TurnOnSingleLED(locations[0], locations[1], locations[2], 2);
+	// TurnOnSingleLED(locations[3], locations[4], locations[5], 2);
+	// TurnOnSingleLED(locations[6], locations[7], locations[8], 2);
+	// TurnOnSingleLED(locations[9], locations[10], locations[11], 2);
+	// int location[3];
 	// location[0] = 3; //face
-	// location[1] = 1; //column
+	// location[1] = 3; //column
 	// location[2] = 3; //row
-	// TurnOnSingleLED(location[0], location[1], location[2], 1);
+	// TurnOnSingleLED(location[0], location[1], location[2], 2);
+	// int* loc2;
+	// int temploc;
 	// int i = 0;
+	// int rando1;
+	// int rando2;
+	// int rando3;
 	// while(i<40){
 		// displayLEDs(LEDs);
 		// i++;
 	// }
 	// while(1){
-		// MoveLED(location[0], location[1], location[2], 0, 0, -1);
+		// MoveLED(location, (int) random(2), (int) random(2), (int) random(2));
+		// rando1 = (int) random(2);
+		// rando2 = (int) random(2);
+		// rando3 = (int) random(2);
+		// MoveBlock(locations, 4, rando1, rando2, rando3);
 		// i = 0;
-		// while(i<40){
+		// while(i<180){
 			// displayLEDs(LEDs);
 			// i++;
 		// }
+		// temploc = locations[0];
+		// Serial.println(temploc);
+		// temploc = locations[1];
+		// Serial.println(temploc);
+		// temploc = locations[2];
+		// Serial.println(temploc);
 	// }
 }
