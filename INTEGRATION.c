@@ -1109,8 +1109,503 @@ void MoveLED(int location[], int movePitch, int moveYaw, int moveRoll){ //WORKS 
 	}
 } 
 
-void MoveBlock(int locations[], int blockSize, int movePitch, int moveYaw, int moveRoll){//locations contains the face, column, row information of all the LEDs that need moved
+void TrailLED(int location[], int movePitch, int moveYaw, int moveRoll, int color){ //same as MoveLED but keeps original LED
+	int face = location[0];
+	int column = location[1];
+	int row = location[2];
+	if(movePitch!=0&&moveYaw!=0){
+		TrailLED(location,movePitch,0,moveRoll,color);
+		movePitch = 0;
+		face = location[0];
+		column = location[1];
+		row = location[2];
+	}
+	if(movePitch!=0&&moveRoll!=0){
+		TrailLED(location, movePitch,moveYaw,0,color);
+		movePitch = 0;
+		face = location[0];
+		column = location[1];
+		row = location[2];
+	}
+	if(moveYaw!=0&&moveRoll!=0){
+		TrailLED(location, movePitch,moveYaw,0,color);
+		moveYaw = 0;
+		face = location[0];
+		column = location[1];
+		row = location[2];
+	}
+	int tempRow = row*3;
+	if(face == 5){ //+column is -Roll, +row is -Pitch
+		if(column-moveRoll>5){
+			face = 1;
+			moveRoll = (column-moveRoll)-6;
+			column = -(row-6);
+			row = 1;
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}else if(row-movePitch>5){
+			face = 4;
+			movePitch = (row-movePitch)-6;
+			row = -(column-6);
+			column = 1;
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}
+		if(column-moveRoll<1){
+			face = 3;
+			moveRoll = column-moveRoll;
+			column = 6-row;
+			row = 5;
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}else if(row-movePitch<1){
+			face = 2;
+			movePitch = row-movePitch;
+			row = column;
+			column = 1;
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}
+		TurnOnSingleLED(face, column-moveRoll, row-movePitch, color);
+                location[0] = face; //for telling you where the LED ended up after you moved it
+                location[1] = column-moveRoll;
+                location[2] = row-movePitch;                
+	}else if(face == 4){ //+column is -Pitch, +row is -Yaw
+		if(column-movePitch>5){
+			face = 0;
+			movePitch = (column-movePitch)-6;
+			column = 5;
+			row = 6-row;
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}else if(row-moveYaw>5){
+			face = 3;
+			moveYaw = (row-moveYaw)-6;
+			row = -(column-6);
+			column = 1;
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}
+		if(column-movePitch<1){
+			face = 5;
+			movePitch = column-movePitch;
+			column = 6-row;
+			row = 5;
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}else if(row-moveYaw<1){	 
+			face = 1;
+			moveYaw = row-moveYaw;
+			row = column;
+			column = 1;
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}
+		TurnOnSingleLED(face, column-movePitch, row-moveYaw, color);	
+                location[0] = face;
+                location[1] = column-movePitch;
+                location[2] = row-moveYaw;       
+	}else if(face == 3){ //+column is -Yaw, +row is -Roll
+		if(column-moveYaw>5){
+			face = 2;
+			moveYaw = (column-moveYaw)-6;
+			column = 6-row;
+			row = 1;
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}else if(row-moveRoll>5){
+			face = 5;
+			moveRoll = (row-moveRoll)-6;
+			row = 6-column;
+			column = 1;
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}
+		if(column-moveYaw<1){
+			face = 4;
+			moveYaw = column-moveYaw;
+			column = 6-row;
+			row = 5;	 
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}else if(row-moveRoll<1){
+			face = 0;
+			moveRoll = row-moveRoll;
+			row = 1;
+			column = 6-column;
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}
+		TurnOnSingleLED(face, column-moveYaw, row-moveRoll, color);
+                location[0] = face;
+                location[1] = column-moveYaw;
+                location[2] = row-moveRoll;       
+	}else if(face == 2){ //+column is +Pitch, +row is -Yaw	 
+		if(column+movePitch>5){
+			face = 0;
+			movePitch = (column+movePitch)-6;
+			column = 1;
+			row = row;
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}else if(row-moveYaw>5){
+			face = 1;
+			moveYaw = (row-moveYaw)-6;
+			row = column;
+			column = 5;
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}
+		if(column+movePitch<1){
+			face = 5;
+			movePitch = column+movePitch;
+			column = row;
+			row = 1;
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}else if(row-moveYaw<1){
+			face = 3;
+			moveYaw = row-moveYaw;
+			row = -(column-6);
+			column = 5;
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}
+		TurnOnSingleLED(face, column+movePitch, row-moveYaw, color);
+                location[0] = face;
+                location[1] = column+movePitch;
+                location[2] = row-moveYaw;       
+	}else if(face == 1){ //+column is +Yaw, +row is -Roll
+		if(column+moveYaw>5){
+			face = 2;
+			moveYaw = (column+moveYaw)-6;
+			column = row;
+			row = 5; 	 
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}else if(row-moveRoll>5){
+			face = 0;
+			moveRoll = (row-moveRoll)-6;
+			row = 5;
+			column = 6-column;
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}
+		if(column+moveYaw<1){
+			face = 4;
+			moveYaw = column+moveYaw;
+			column = row;
+			row = 1;
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}else if(row-moveRoll<1){
+			face = 5;
+			moveRoll = row-moveRoll;
+			row = 6-column;
+			column = 5;
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}
+		TurnOnSingleLED(face, column+moveYaw, row-moveRoll, color);
+                location[0] = face;
+                location[1] = column+moveYaw;
+                location[2] = row-moveRoll;       
+	}else if(face == 0){ //+column is +Pitch, +row is +Roll 	
+		if(column+movePitch>5){
+			face = 4;
+			movePitch = (column+movePitch)-6;
+			column = 5;
+			row = 6-row;
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}else if(row+moveRoll>5){
+			face = 1;
+			moveRoll = (row+moveRoll)-6;
+			row = 5;
+			column = 6-column;
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}
+		if(column+movePitch<1){
+			face = 2;
+			movePitch = column+movePitch;
+			column = 5;
+			row = row;
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}else if(row+moveRoll<1){
+			face = 3;
+			moveRoll = row+moveRoll;
+			row = 1;
+			column = 6-column;
+			location[0] = face; 
+            location[1] = column;
+            location[2] = row; 
+			TurnOnSingleLED(location[0], location[1], location[2], color);
+			TrailLED(location, movePitch, moveYaw, moveRoll,color);
+		}
+		TurnOnSingleLED(face, column+movePitch, row+moveRoll, color);
+                location[0] = face;
+                location[1] = column+movePitch;
+                location[2] = row+moveRoll;       
+	}
+}
+
+void CreateBlock(int location[], int color){ //almost works
+	int face = location[0];
+	int column = location[1];
+	int row = location[2];
+	TurnOnSingleLED(face, column, row, color);
+	TrailLED(location,1,0,0,color);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,0,1,0,color);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,0,0,1,color);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,-1,0,0,color);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,0,-1,0,color);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,0,0,-1,color);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,1,1,0,color);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,0,1,1,color);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,1,0,1,color);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,-1,-1,0,color);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,0,-1,-1,color);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,-1,0,-1,color);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,1,-1,0,color);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,0,1,-1,color);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,1,0,-1,color);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,-1,1,0,color);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,0,-1,1,color);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,-1,0,1,color);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+}
+
+void TurnBlockOff(int location[]){ //almost works
+	int face = location[0];
+	int column = location[1];
+	int row = location[2];
+	int color = 7;
+	TrailLED(location,1,0,0,color);
+	TurnOffSingleLED(location[0], location[1], location[2]);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,0,1,0,color);
+	TurnOffSingleLED(location[0], location[1], location[2]);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,0,0,1,color);
+	TurnOffSingleLED(location[0], location[1], location[2]);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,-1,0,0,color);
+	TurnOffSingleLED(location[0], location[1], location[2]);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,0,-1,0,color);
+	TurnOffSingleLED(location[0], location[1], location[2]);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,0,0,-1,color);
+	TurnOffSingleLED(location[0], location[1], location[2]);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,1,1,0,color);
+	TurnOffSingleLED(location[0], location[1], location[2]);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,0,1,1,color);
+	TurnOffSingleLED(location[0], location[1], location[2]);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,1,0,1,color);
+	TurnOffSingleLED(location[0], location[1], location[2]);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,-1,-1,0,color);
+	TurnOffSingleLED(location[0], location[1], location[2]);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,0,-1,-1,color);
+	TurnOffSingleLED(location[0], location[1], location[2]);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,-1,0,-1,color);
+	TurnOffSingleLED(location[0], location[1], location[2]);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,1,-1,0,color);
+	TurnOffSingleLED(location[0], location[1], location[2]);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,0,1,-1,color);
+	TurnOffSingleLED(location[0], location[1], location[2]);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,1,0,-1,color);
+	TurnOffSingleLED(location[0], location[1], location[2]);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,-1,1,0,color);
+	TurnOffSingleLED(location[0], location[1], location[2]);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,0,-1,1,color);
+	TurnOffSingleLED(location[0], location[1], location[2]);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TrailLED(location,-1,0,1,color);
+	TurnOffSingleLED(location[0], location[1], location[2]);
+	location[0] = face;
+	location[1] = column;
+	location[2] = row;
+	TurnOffSingleLED(face, column, row);
+}
+
+void MoveBlock(int location[], int movePitch, int moveYaw, int moveRoll, int color){//almost works. location[] contains the face, column, row information of the center of the LEDs that need moved
 	//doesn't work yet
+	int face = location[0];
+	int column = location[1];
+	int row = location[2];
+	TurnBlockOff(location); //doesn't work yet
+	TurnOnSingleLED(face,column,row,color);
+	MoveLED(location, movePitch, moveYaw, moveRoll); //move center LED
+	CreateBlock(location,color); //now create a new block around the new center
 }
 
 void translateReceivedLED(int rowReceived, int colorReceived, int indexReceived){
@@ -1819,14 +2314,18 @@ void loop() {
 	// TurnOnSingleLED(locations[3], locations[4], locations[5], 2);
 	// TurnOnSingleLED(locations[6], locations[7], locations[8], 2);
 	// TurnOnSingleLED(locations[9], locations[10], locations[11], 2);
-	// int location[3];
-	// location[0] = 3; //face
-	// location[1] = 3; //column
-	// location[2] = 3; //row
+	int location[3];
+	location[0] = 0; //face
+	location[1] = 3; //column
+	location[2] = 3; //row
+	CreateBlock(location, 2);
+	// while(1){
+	// displayLEDs(LEDs);
+	// }
 	// TurnOnSingleLED(location[0], location[1], location[2], 2);
 	// int* loc2;
 	// int temploc;
-	// int i = 0;
+	int i = 0;
 	// int rando1;
 	// int rando2;
 	// int rando3;
@@ -1835,7 +2334,6 @@ void loop() {
 		// i++;
 	// }
 	// while(1){
-		// MoveLED(location, (int) random(2), (int) random(2), (int) random(2));
 		// rando1 = (int) random(2);
 		// rando2 = (int) random(2);
 		// rando3 = (int) random(2);
@@ -1845,11 +2343,13 @@ void loop() {
 			// displayLEDs(LEDs);
 			// i++;
 		// }
+		// i=0;
+		// MoveBlock(location, 0, 0, 1, 2);
 		// temploc = locations[0];
 		// Serial.println(temploc);
 		// temploc = locations[1];
 		// Serial.println(temploc);
 		// temploc = locations[2];
 		// Serial.println(temploc);
-	// }
+	}
 }
