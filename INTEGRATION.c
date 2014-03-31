@@ -161,7 +161,7 @@ void setup() {
   
 /*WIRELESS:*/
   pinMode(XbeeSleep, OUTPUT);
-  Serial3.begin(9600);
+  Serial3.begin(115200);
   xbee.setSerial(Serial3);      //set the xbee to rx3, pin 7 (to xbee pin 2),  and tx3, pin 8 (to xbee pin 3).
   digitalWrite(XbeeSleep, 1);	//0 wakes up the xbee, 1 puts it to sleep
   
@@ -354,25 +354,25 @@ void displayLEDs(boolean LED[6][5][16]){ //needs to be called often to display t
     
   columnDISPLAY=0;
   while(columnDISPLAY<5){    //for displaying each column
-     digitalWriteFast(clk,1);         //Prime the clock                    
-     delayMicroseconds(zLED);
-     digitalWriteFast(clk,0);
-     delayMicroseconds(zLED);
-     digitalWriteFast(clk,1);                            
-     delayMicroseconds(zLED);
-     digitalWriteFast(clk,0);
-     digitalWriteFast(clk,1);                             
-     delayMicroseconds(zLED);
-     digitalWriteFast(clk,0);
-     delayMicroseconds(zLED);
-     digitalWriteFast(clk,1);                            
-     delayMicroseconds(zLED);
+     // digitalWriteFast(clk,1);         //Prime the clock                    
+     // delayMicroseconds(zLED);
+     // digitalWriteFast(clk,0);
+     // delayMicroseconds(zLED);
+     // digitalWriteFast(clk,1);                            
+     // delayMicroseconds(zLED);
+     // digitalWriteFast(clk,0);
+     // digitalWriteFast(clk,1);                             
+     // delayMicroseconds(zLED);
+     // digitalWriteFast(clk,0);
+     // delayMicroseconds(zLED);
+     // digitalWriteFast(clk,1);                            
+     // delayMicroseconds(zLED);
      digitalWriteFast(clk,0);
      digitalWriteFast(le,HIGH);         //Begin
-     delayMicroseconds(zLED);
-     digitalWriteFast(clk,1);                            
-     delayMicroseconds(zLED);
-     digitalWriteFast(clk,0);
+     // delayMicroseconds(zLED);
+     // digitalWriteFast(clk,1);                            
+     // delayMicroseconds(zLED);
+     // digitalWriteFast(clk,0);
      digitalWriteFast(le,LOW);
      digitalWriteFast(oe,HIGH); 
      delayMicroseconds(zLED);
@@ -399,20 +399,61 @@ void displayLEDs(boolean LED[6][5][16]){ //needs to be called often to display t
      digitalWriteFast(clk,0);
      digitalWriteFast(le,LOW);
      digitalWriteFast(sdi, LOW);      
-     delayMicroseconds(zLED);
-     digitalWriteFast(clk,1); 
-     delayMicroseconds(zLED);
-     digitalWriteFast(clk,0);
+     // delayMicroseconds(zLED);
+     // digitalWriteFast(clk,1); 
+     // delayMicroseconds(zLED);
+     // digitalWriteFast(clk,0);
      digitalWriteFast(oe,LOW);
      
      digitalWrite(Mosfet[columnDISPLAY],0);       //turn the correct column on
      delayMicroseconds(t);        //keep the column on for a little while
-     digitalWrite(Mosfet[columnDISPLAY], 1);  //then turn the mosfet off so we can move to the next column
+     //xbee.send(tx);	
+	 digitalWrite(Mosfet[columnDISPLAY], 1);  //then turn the mosfet off so we can move to the next column
      updateaccelOTHER();     								/*KENT YOU CAN CHANGE THIS TO PUSH AND POP*/
-	 delayMicroseconds(1);
-     updateaccelOTHER();     								/*KENT YOU CAN CHANGE THIS TO PUSH AND POP*/
+	 //delayMicroseconds(1);
+     //updateaccelOTHER();     								/*KENT YOU CAN CHANGE THIS TO PUSH AND POP*/
 	 columnDISPLAY++;                         //move to the next column
   }
+}
+
+void ShowTransmit(boolean LED[6][5][16]){ //Called when transmitting when you want to be flashy about it
+  digitalWrite(clk,0);
+  digitalWrite(sdi,LOW);
+  columnDISPLAY=0;
+  while(columnDISPLAY<5){    //for displaying each column
+     digitalWriteFast(clk,0);
+     digitalWriteFast(le,HIGH);         //Begin
+     digitalWriteFast(le,LOW);
+     digitalWriteFast(oe,HIGH); 
+     delayMicroseconds(zLED);
+     digitalWriteFast(clk,1);          
+     faceDISPLAY = 0; 
+     while(faceDISPLAY<6){   //iterate through to write the correct row information on one column for all 6 faces
+       rowDISPLAY = 0;
+       while(rowDISPLAY<16){
+         delayMicroseconds(zLED);
+         digitalWriteFast(clk,0);
+         digitalWriteFast(sdi, LED[faceDISPLAY][columnDISPLAY][rowDISPLAY]);       //Send SDI Info
+         delayMicroseconds(zLED);     
+         digitalWriteFast(clk,1);                            
+         rowDISPLAY++;
+       }
+       rowDISPLAY = 0;
+       faceDISPLAY++;
+     }   
+     digitalWriteFast(le,HIGH);         //End  
+     delayMicroseconds(zLED);
+     digitalWriteFast(clk,0);
+     digitalWriteFast(le,LOW);
+     digitalWriteFast(sdi, LOW);      
+     digitalWriteFast(oe,LOW);
+     digitalWriteFast(Mosfet[columnDISPLAY],0);       //turn the correct column on
+	 delayMicroseconds(10000);
+	 xbee.send(tx);					//keep the column on for a little while
+     digitalWriteFast(Mosfet[columnDISPLAY], 1);  //then turn the mosfet off so we can move to the next column
+	 columnDISPLAY++;                         //move to the next column
+  }
+  //Serial.println("transmitted");
 }
 
 void TurnOnSingleLED(int face, int column, int row, int color){//red=0,green=1,blue=2, rg=3, rb=4, gb = 5, all=6. Row: 1-5. Column: 1-5. Face: 0-5.
@@ -1839,11 +1880,9 @@ void StartGame1(){ //navigate your blue guy across the cube, don't hit the rails
 void DisplayGame2(){
 	updateaccel(x,y,z);
         int i = 0;
-        int melody[] = {
-          NOTE_F4,NOTE_D4, NOTE_C5};
+        int melody[] = {NOTE_F4,NOTE_D4, NOTE_C5};
         // note durations: 4 = quarter note, 8 = eighth note, etc.:
-        int noteDurations[] = {
-          8, 8, 8};
+        int noteDurations[] = {8, 8, 8};
 	int xLED = 0;
 	columnDISPLAY = 0;
 	while(columnDISPLAY<5){
@@ -2021,6 +2060,7 @@ void transmitGameState(){
     payload[30] = 64 + GameState;
     payload[31] = 65; //ID for F1 = 65, F2 = 66, F3 = 67
     xbee.send(tx);
+	//ShowTransmit(LEDs);
 }
 
 void DisplayGame3(){
@@ -2108,24 +2148,52 @@ void Game3(){
 } 
 
 void Game2(){
+	digitalWrite(XbeeSleep, 0); //wake up Xbee since it will be used now
 	updateaccel(x,y,z);
         int i = 0;
         GameState = 20;
 	DisplayGame2();
 	transmitGameState();
         receivedGameState = 0;
-	while(receivedGameState<20 || receivedGameState>26){ //wait until a partner is doing Game2
+	while(1/*receivedGameState<20 || receivedGameState>26*/){ //wait until a partner is doing Game2
 		displayLEDs(LEDs);
-		xbee.readPacket();
+		xbee.readPacket(); //this method has less delay than (xbee.readPacket(1)
 		if (xbee.getResponse().isAvailable()) {  // got something
 		   xbee.getResponse().getRx16Response(rx16);
 		   receivedGameState = (int) (rx16.getData(30)&31); //where the color ID is, can be used for GameState too (why not?)
 		}
                 i++;
-                if(i == 300){ // make sure other cube friends properly
-                  transmitGameState();
+                if(i == 100){ // make sure other cube friends properly
+				  // displayLEDs(LEDs);
+				  // t = 2000;
+				  // displayLEDs(LEDs);
+				  // t = 2500;
+				  // displayLEDs(LEDs);
+				  // t = 2800;
+				  // displayLEDs(LEDs);
+				  // t = 3000;
+				  // displayLEDs(LEDs);
+				  // t = 3100;
+				  // displayLEDs(LEDs);
+				  // t = 3200;
+				  // displayLEDs(LEDs);
+				  // t = 3400;
+				  // displayLEDs(LEDs);
+				  // t = 3800;
+				  // displayLEDs(LEDs);
+                  transmitGameState();  //where all the delay comes from. Corresponds to about a 3ms delay
+				  // t = 3000;
+				  // displayLEDs(LEDs);
+				  // t = 2000;
+				  // displayLEDs(LEDs);
+				  // t = 1500;
                   i = 0;
                 }
+		if(receivedGameState==20){
+			Serial.println("heyyyyyyyy");
+			//FriendedTone();
+			receivedGameState = 0;
+		}
 	}
 	//GameState = 21 + random(6);
     transmitGameState();
@@ -2290,7 +2358,7 @@ void loop() {
 		// ShowOffAccel();
 		// displayLEDs(LEDs);
 	// }
-  
+
 	while(GameState == -1){   
 		GameState = idle();
 	}
@@ -2300,7 +2368,7 @@ void loop() {
 	if(GameState == 10){
 		Game1();
 	}else if(GameState == 20){
-		Game2();22
+		Game2();
 	}else if(GameState == 30){
 		Game3();
 	}
@@ -2351,5 +2419,5 @@ void loop() {
 		// Serial.println(temploc);
 		// temploc = locations[2];
 		// Serial.println(temploc);
-	}
+	// }
 }
