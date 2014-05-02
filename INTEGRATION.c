@@ -103,12 +103,14 @@ int columnDISPLAY = 0;
 boolean LEDs[6][5][16];         //5 columns each have 6 faces each have 16 rows (only 15 LEDs though)
 boolean fakeLEDs[6][5][16]; 
 /* WIRELESS STUFF: */
+int codedPosition=0;
+int XbeeID;
 XBee xbee = XBee();
 XBeeResponse response = XBeeResponse();
 Rx16Response rx16 = Rx16Response();// create reusable response objects for responses we expect to handle 
 Rx64Response rx64 = Rx64Response();
 boolean LEDreceived[6][5][16];
-uint8_t payload[32];// allocate 32 bytes for to hold a 10-bit analog reading
+uint8_t payload[3];// allocate 32 bytes for to hold a 10-bit analog reading
 Tx16Request tx = Tx16Request(0x1874, payload, sizeof(payload));// 16-bit addressing: Enter address of remote XBee, typically the coordinator
 TxStatusResponse txStatus = TxStatusResponse();
 const int XbeeSleep = 6;
@@ -147,7 +149,7 @@ int accel_points_taken = 0;
 int x_hysteresis = 0;
 int y_hysteresis = 0;
 int z_hysteresis = 0;
-const int Hysteresis = 30; //the step size of the accelerometer you want... (For battling jitteryness! Jitteryness is the enemy!)
+const int Hysteresis = 35; //the step size of the accelerometer you want... (For battling jitteryness! Jitteryness is the enemy!)
 // Range is about 480 on each axis, 10 LEDs between one side and another. So Hysteresis = 48ish or 40 to 25ish seems like a good idea. 10 too low.
 // I think 25 is good, it only gets jittery if the user has jittery hands. So maybe do 30.
 
@@ -156,7 +158,7 @@ int GameState = -1;
 
 void setup() {
   Serial.begin(9600);
-  randomSeed(analogRead(A13));
+  randomSeed(analogRead(read_accel_x)); //used to be A13
 /*ACCELEROMETER:*/  
   pinMode(ZeroG, INPUT);
   analogReadRes(10);
@@ -168,6 +170,7 @@ void setup() {
   Serial3.begin(115200);
   xbee.setSerial(Serial3);      //set the xbee to rx3, pin 7 (to xbee pin 2),  and tx3, pin 8 (to xbee pin 3).
   digitalWrite(XbeeSleep, 1);	//0 wakes up the xbee, 1 puts it to sleep
+  XbeeID = random(1,256);
   
 /*LED:*/
   pinMode(Mosfet[0], OUTPUT);
@@ -299,7 +302,7 @@ void clearaccelOTHER(){ //from Phil. use this after accelaveOTHER to reset the a
 
 int GoToSleep(){
 	int sleepTime = 7;  //30 corresponds to about 30 seconds. Number determines how fast it will go to sleep with inactivity
-	int sleepSensitivity = 27; //Determines how active you have to be to avoid going to asleep
+	int sleepSensitivity = 35; //Determines how active you have to be to avoid going to asleep
 	int maxSleep;
 	int minSleep;
 	int i = 0;
@@ -595,10 +598,14 @@ void TurnOnFace(int face, int color){//red=0,green=1,blue=2, rg=3, rb=4, gb = 5,
 	}
 }
 
-void TurnOnCubeLED(int color){//red=0,green=1,blue=2, rg=3, rb=4, gb = 5, all=6
+void TurnOnCubeLED(int color){//red=0,green=1,blue=2, rg=3, rb=4, gb = 5, all=6, -1 is turn LED off
 	int iface = 0;
 	int icolumn = 1;
 	int irow = 1;
+	if(color==-1){
+		TurnOffCubeLED();
+		return;
+	}
 	while(iface<6){
 		icolumn = 1;
 		while(icolumn<6){
@@ -626,6 +633,82 @@ void TurnOffCubeLED(){
 			rowDISPLAY++;
 		}
 		columnDISPLAY++;
+	}
+}
+
+void TurnOnRowFake(int face, int row, int color){//red=0,green=1,blue=2. Row: 1-5. Face: 0-5.
+  int row1 = (row)*3;
+  int row2 = (row)*3-1;
+  int row3 = (row)*3-2;
+  row = (row)*3-color;
+  int column = 0;
+  while(column<5){
+    //fakeLEDs[face][column][row1] = LOW;
+    //fakeLEDs[face][column][row2] = LOW;
+    //fakeLEDs[face][column][row3] = LOW;
+    fakeLEDs[face][column][row] = HIGH;
+    column++;
+  }
+}
+
+void TurnOnColumnFake(int face, int column, int color){//red=0,green=1,blue=2. Column: 1-5. Face: 0-5.
+  int row = 0;
+  //while(row<16){
+    //fakeLEDs[face][column-1][row] = LOW;
+    //row++;
+  // }
+  row = 3-color;
+  fakeLEDs[face][column-1][row] = HIGH;
+  row = row+3;
+  fakeLEDs[face][column-1][row] = HIGH;
+  row = row+3;
+  fakeLEDs[face][column-1][row] = HIGH;
+  row = row+3;
+  fakeLEDs[face][column-1][row] = HIGH;
+  row = row+3;
+  fakeLEDs[face][column-1][row] = HIGH;
+}
+
+void TurnOffCubeFake(){
+	columnDISPLAY = 0;
+	while(columnDISPLAY<5){
+		rowDISPLAY = 0;
+		while(rowDISPLAY<16){      //turn all fakeLEDs off
+			faceDISPLAY = 0;
+			while(faceDISPLAY<6){
+				fakeLEDs[faceDISPLAY][columnDISPLAY][rowDISPLAY]=LOW;
+				faceDISPLAY++;
+			}
+			rowDISPLAY++;
+		}
+		columnDISPLAY++;
+	}
+}
+
+void AddOnLED(int face, int column, int row, int color){//does not over-write colors that were already on for a given LED!! red=0,green=1,blue=2, rg=3, rb=4, gb = 5, all=6. Row: 1-5. Column: 1-5. Face: 0-5.
+	int row1 = (row)*3;
+	int row2 = (row)*3-1;
+	int row3 = (row)*3-2;
+	row = (row)*3-color;
+	if(color == 0){
+		fakeLEDs[face][column-1][row] = HIGH;
+	}else if(color == 1){
+		fakeLEDs[face][column-1][row] = HIGH;
+	}else if(color == 2){
+		fakeLEDs[face][column-1][row] = HIGH;
+	}else if(color == 3){
+		fakeLEDs[face][column-1][row1] = HIGH;
+		fakeLEDs[face][column-1][row2] = HIGH;
+	}else if(color == 4){
+		fakeLEDs[face][column-1][row1] = HIGH;
+		fakeLEDs[face][column-1][row3] = HIGH;
+	}else if(color == 5){
+		fakeLEDs[face][column-1][row2] = HIGH;
+		fakeLEDs[face][column-1][row3] = HIGH;
+	}else if(color == 6){
+		fakeLEDs[face][column-1][row1] = HIGH;
+		fakeLEDs[face][column-1][row2] = HIGH;
+		fakeLEDs[face][column-1][row3] = HIGH;
 	}
 }
 
@@ -731,28 +814,111 @@ void ShowOff(){
    
 }
 
-void ShowOffAccel(){ //kinda lame but shows accel working well
-	int row = 1;
-	int column = 1;
-	int color = 0;
-	accelaveOTHER();
-	int AccelOffSet = z_hysteresis/50; //can do any axis
-	clearaccelOTHER();
-	//Serial.println(AccelOffSet);
-	while(column<6){
-		row = 1;
-		while(row<6){
-			color = ((column+row+AccelOffSet)%6);
+void ShowOffSaveBattery(){ //not all LEDs on
+  CountShowOff++;
+  TurnOffCubeLED();
+  int row = 1;
+  int column = 1;
+  int color = (CountShowOff/5)%6;
+  if(CountShowOff<10){
+    while(column<6){
+      row = 1;
+      while(row<6){
+        if(color == ((column+row)%6)){
 			TurnOnSingleLED(5,column,row,color);
 			TurnOnSingleLED(4,column,row,color);
 			TurnOnSingleLED(3,column,row,color);
 			TurnOnSingleLED(2,column,row,color);
 			TurnOnSingleLED(1,column,row,color);
 			TurnOnSingleLED(0,column,row,color);
-			row++;
 		}
-		column++;
-	}
+		row++;
+      }
+      column++;
+    }
+  }else if(CountShowOff>9 && CountShowOff<20){
+    while(column<6){
+      row = 1;
+      while(row<6){
+        if(color == ((column+row+1)%6)){
+			TurnOnSingleLED(5,column,row,color);
+			TurnOnSingleLED(4,column,row,color);
+			TurnOnSingleLED(3,column,row,color);
+			TurnOnSingleLED(2,column,row,color);
+			TurnOnSingleLED(1,column,row,color);
+			TurnOnSingleLED(0,column,row,color);
+		}
+        row++;
+      }
+      column++;
+    }
+  }else if(CountShowOff>19 && CountShowOff<30){
+    while(column<6){
+      row = 1;
+      while(row<6){
+        if(color == ((column+row+2)%6)){
+			TurnOnSingleLED(5,column,row,color);
+			TurnOnSingleLED(4,column,row,color);
+			TurnOnSingleLED(3,column,row,color);
+			TurnOnSingleLED(2,column,row,color);
+			TurnOnSingleLED(1,column,row,color);
+			TurnOnSingleLED(0,column,row,color);
+		}
+        row++;
+      }
+      column++;
+    }
+  }else if(CountShowOff>29 && CountShowOff<40){
+    while(column<6){
+      row = 1;
+      while(row<6){
+        if(color == ((column+row+3)%6)){
+			TurnOnSingleLED(5,column,row,color);
+			TurnOnSingleLED(4,column,row,color);
+			TurnOnSingleLED(3,column,row,color);
+			TurnOnSingleLED(2,column,row,color);
+			TurnOnSingleLED(1,column,row,color);
+			TurnOnSingleLED(0,column,row,color);
+		}
+        row++;
+      }
+      column++;
+    }
+  }else if(CountShowOff>39 && CountShowOff<50){
+    while(column<6){
+      row = 1;
+      while(row<6){
+        if(color == ((column+row+4)%6)){
+			TurnOnSingleLED(5,column,row,color);
+			TurnOnSingleLED(4,column,row,color);
+			TurnOnSingleLED(3,column,row,color);
+			TurnOnSingleLED(2,column,row,color);
+			TurnOnSingleLED(1,column,row,color);
+			TurnOnSingleLED(0,column,row,color);
+		}
+        row++;
+      }
+      column++;
+    }
+  }else if(CountShowOff>49 && CountShowOff<60){
+      while(column<6){
+      row = 1;
+      while(row<6){
+        if(color == ((column+row+5)%6)){
+			TurnOnSingleLED(5,column,row,color);
+			TurnOnSingleLED(4,column,row,color);
+			TurnOnSingleLED(3,column,row,color);
+			TurnOnSingleLED(2,column,row,color);
+			TurnOnSingleLED(1,column,row,color);
+			TurnOnSingleLED(0,column,row,color);
+		}
+        row++;
+      }
+      column++;
+    }
+  }else if(CountShowOff>59){
+    CountShowOff = 0;
+  }
 }
 
 int CountRandoCube = 0;
@@ -776,7 +942,7 @@ void RandoCube(){
 		}
 		CountRandoCube++;
 	}
-	i = (int) (15);
+	i = (int) random(25);
 	while(i>0){
 		TurnOnSingleLED((int) random(0,6),(int) random(1,6),(int) random(1,6),(int) random(0,6));
 		i--;
@@ -1820,129 +1986,6 @@ void MoveBlock(int location[], int movePitch, int moveYaw, int moveRoll, int col
 	CreateBlock(location,color); //now create a new block around the new center
 }
 
-void translateReceivedLED(int rowReceived, int colorReceived, int indexReceived){
-  int faceReceived = indexReceived/5; //index 0-4 is face 0, index 25-29 is face 5
-  int columnReceived = indexReceived%5; //index 0 is column 0, index 4 is column 4, index 5 is column 0 again
-  boolean row1 = (boolean) rowReceived&1; 
-  boolean row2 = (boolean) (rowReceived&2) >> 1;
-  boolean row3 = (boolean) (rowReceived&4) >> 2;
-  boolean row4 = (boolean) (rowReceived&8) >> 3;
-  boolean row5 = (boolean) rowReceived >> 4;    //10000
-  LEDreceived[faceReceived][columnReceived][3-colorReceived] = row1;
-  LEDreceived[faceReceived][columnReceived][6-colorReceived] = row2;
-  LEDreceived[faceReceived][columnReceived][9-colorReceived] = row3;
-  LEDreceived[faceReceived][columnReceived][12-colorReceived] = row4;
-  LEDreceived[faceReceived][columnReceived][15-colorReceived] = row5;
-  //Serial.print(faceReceived); //for rowSent = 26 = 0b11010, row1 = 0  (original sent character is 0b01011010 = 90
-  //Serial.println(columnReceived);
-  //Serial.println(colorReceived); 
-}
-
-void CopyLEDDisplayIntoPayload(int colorSend, int IDSend){  //fills payload for sending the color cube you specified
-	int i = 0;
-	while(i<30){
-		payload[i] = (uint8_t) 64 + LEDs[i/5][i%5][3-colorSend] + LEDs[i/5][i%5][6-colorSend]*2 + LEDs[i/5][i%5][9-colorSend]*4 + LEDs[i/5][i%5][12-colorSend]*8 + LEDs[i/5][i%5][15-colorSend]*16;
-                i++;
-	}
-	payload[30] = (uint8_t) 64 + colorSend;
-	payload[31] = (uint8_t) IDSend;
-}
-
-void displayReceivedLEDs(boolean LED[6][5][16]){
-	faceDISPLAY = 0;
-	while(faceDISPLAY<6){
-		columnDISPLAY = 0;
-		while(columnDISPLAY<5){      //initialize LEDs to be completely off
-			rowDISPLAY = 0;
-			while(rowDISPLAY<16){
-				LEDs[faceDISPLAY][columnDISPLAY][rowDISPLAY] = LED[faceDISPLAY][columnDISPLAY][rowDISPLAY];
-					if(LED[faceDISPLAY][columnDISPLAY][rowDISPLAY]){
-						Serial.println("HIGH");
-					}
-				rowDISPLAY++;
-			}
-			columnDISPLAY++;
-		}
-		faceDISPLAY++;
-	}
-}
-
-void TurnOnRowFake(int face, int row, int color){//red=0,green=1,blue=2. Row: 1-5. Face: 0-5.
-  int row1 = (row)*3;
-  int row2 = (row)*3-1;
-  int row3 = (row)*3-2;
-  row = (row)*3-color;
-  int column = 0;
-  while(column<5){
-    //fakeLEDs[face][column][row1] = LOW;
-    //fakeLEDs[face][column][row2] = LOW;
-    //fakeLEDs[face][column][row3] = LOW;
-    fakeLEDs[face][column][row] = HIGH;
-    column++;
-  }
-}
-
-void TurnOnColumnFake(int face, int column, int color){//red=0,green=1,blue=2. Column: 1-5. Face: 0-5.
-  int row = 0;
-  //while(row<16){
-    //fakeLEDs[face][column-1][row] = LOW;
-    //row++;
-  // }
-  row = 3-color;
-  fakeLEDs[face][column-1][row] = HIGH;
-  row = row+3;
-  fakeLEDs[face][column-1][row] = HIGH;
-  row = row+3;
-  fakeLEDs[face][column-1][row] = HIGH;
-  row = row+3;
-  fakeLEDs[face][column-1][row] = HIGH;
-  row = row+3;
-  fakeLEDs[face][column-1][row] = HIGH;
-}
-
-void TurnOffCubeFake(){
-	columnDISPLAY = 0;
-	while(columnDISPLAY<5){
-		rowDISPLAY = 0;
-		while(rowDISPLAY<16){      //turn all fakeLEDs off
-			faceDISPLAY = 0;
-			while(faceDISPLAY<6){
-				fakeLEDs[faceDISPLAY][columnDISPLAY][rowDISPLAY]=LOW;
-				faceDISPLAY++;
-			}
-			rowDISPLAY++;
-		}
-		columnDISPLAY++;
-	}
-}
-
-void AddOnLED(int face, int column, int row, int color){//does not over-write colors that were already on for a given LED!! red=0,green=1,blue=2, rg=3, rb=4, gb = 5, all=6. Row: 1-5. Column: 1-5. Face: 0-5.
-	int row1 = (row)*3;
-	int row2 = (row)*3-1;
-	int row3 = (row)*3-2;
-	row = (row)*3-color;
-	if(color == 0){
-		fakeLEDs[face][column-1][row] = HIGH;
-	}else if(color == 1){
-		fakeLEDs[face][column-1][row] = HIGH;
-	}else if(color == 2){
-		fakeLEDs[face][column-1][row] = HIGH;
-	}else if(color == 3){
-		fakeLEDs[face][column-1][row1] = HIGH;
-		fakeLEDs[face][column-1][row2] = HIGH;
-	}else if(color == 4){
-		fakeLEDs[face][column-1][row1] = HIGH;
-		fakeLEDs[face][column-1][row3] = HIGH;
-	}else if(color == 5){
-		fakeLEDs[face][column-1][row2] = HIGH;
-		fakeLEDs[face][column-1][row3] = HIGH;
-	}else if(color == 6){
-		fakeLEDs[face][column-1][row1] = HIGH;
-		fakeLEDs[face][column-1][row2] = HIGH;
-		fakeLEDs[face][column-1][row3] = HIGH;
-	}
-}
-
 void topPosition(int location[]){ //modifies location to hold the "top LED". location[]: 0=Face:0-5, 1=Column:1-5, 2=Row:1-5. 
 	TurnOffCubeFake();
 	//TurnOffCubeLED();
@@ -2214,8 +2257,8 @@ void topPosition(int location[]){ //modifies location to hold the "top LED". loc
 	boolean remember3;
 	faceDISPLAY = 0;
 	int i = 0;
-	int columnPosition;
-	int rowPosition;
+	int columnPosition =0;
+	int rowPosition = 0;
 	if(((Ydegree>45&&Ydegree<135)&&(Zdegree>45&&Zdegree<135)) && Xdegree<=55){  // 45 STRICTEST
 		faceDISPLAY = 0;
 	}else if(((Xdegree>45&&Xdegree<135)&&(Zdegree>45&&Zdegree<135)) && Ydegree<=55){
@@ -2229,7 +2272,7 @@ void topPosition(int location[]){ //modifies location to hold the "top LED". loc
 	}else if(((Ydegree>45&&Ydegree<135)&&(Xdegree>45&&Xdegree<135)) && Zdegree>=125){
 		faceDISPLAY = 2;
 	}else{
-		// Serial.println(" OOOOOPPPPSSSS!!!!!!!!! No hit.");
+		 Serial.println(" OOOOOPPPPSSSS!!!!!!!!! No hit.");
 		if(((Ydegree>45&&Ydegree<135)||(Zdegree>45&&Zdegree<135)) && Xdegree<=45){  // 45 LESS STRICT
 			faceDISPLAY = 0;
 		}else if(((Xdegree>45&&Xdegree<135)||(Zdegree>45&&Zdegree<135)) && Ydegree<=45){
@@ -2243,7 +2286,7 @@ void topPosition(int location[]){ //modifies location to hold the "top LED". loc
 		}else if(((Ydegree>45&&Ydegree<135)||(Xdegree>45&&Xdegree<135)) && Zdegree>=135){
 			faceDISPLAY = 2;
 		}else{
-			// Serial.println(" OOPSS********** No hit again.");
+			 Serial.println(" OOPSS********** No hit again.");
 			if(((Ydegree>45&&Ydegree<135)||(Zdegree>45&&Zdegree<135)) && Xdegree<=50){  // 45 LEAST STRICT
 				faceDISPLAY = 0;
 			}else if(((Xdegree>45&&Xdegree<135)||(Zdegree>45&&Zdegree<135)) && Ydegree<=50){
@@ -2257,7 +2300,7 @@ void topPosition(int location[]){ //modifies location to hold the "top LED". loc
 			}else if(((Ydegree>45&&Ydegree<135)||(Xdegree>45&&Xdegree<135)) && Zdegree>=130){
 				faceDISPLAY = 2;
 			}else{			
-				// Serial.println(" OOPSS***************** No hit again AGAIN.");
+				 Serial.println(" OOPSS***************** No hit again AGAIN.");
 			}
 		}
 	}
@@ -2293,7 +2336,7 @@ void topPosition(int location[]){ //modifies location to hold the "top LED". loc
 		columnDISPLAY++;
 	}
 	
-	if(columnPosition<1 || columnPosition>5 || rowPosition<1 || rowPosition>5){ //in this case keep previous value
+	if((columnPosition<1) || (columnPosition>5) || (rowPosition==0) || (rowPosition==-1) || (rowPosition>5)){ //in this case keep previous value
 		// Serial.print("Error!! Face is ");
 		// Serial.print(faceDISPLAY);
 		// Serial.print(", Column is ");
@@ -2307,16 +2350,6 @@ void topPosition(int location[]){ //modifies location to hold the "top LED". loc
 		// Serial.print(", Z degree is ");
 		// Serial.print((int) Zdegree);
 		// Serial.println(" ");
-		if(columnPosition<1){
-			columnPosition=1;
-		}else if(columnPosition>5){
-			columnPosition=5;
-		}
-		if(rowPosition<1){
-			rowPosition=1;
-		}else if(rowPosition>5){
-			rowPosition=5;
-		}
 	}else{
 		// Serial.print("Face is ");
 		// Serial.print(faceDISPLAY);
@@ -2338,11 +2371,23 @@ void topPosition(int location[]){ //modifies location to hold the "top LED". loc
 	//TurnOnSingleLED(location[0],location[1],location[2], 0);
 }
 
-void transmitGameState(){
-    payload[30] = 64 + GameState;
-    payload[31] = 65; //ID for F1 = 65, F2 = 66, F3 = 67
+void transmitGameState(){ 
+    payload[2] = GameState;
+    payload[1] = codedPosition; 
+	payload[0] = XbeeID; //ID?
     xbee.send(tx);
 	//ShowTransmit(LEDs);
+}
+
+void decodeLED(int location[], int code){ // Modifies location[3] based on code. Code is between 0 and 149.
+	location[0] = code / 25; //face: 0-5
+	location[1] = ((code%25) / 5)+1; //column: 1-5
+	location[2] = ((code%25) % 5)+1; //row: 1-5
+}
+
+int encodeLED(int location[]){ //returns the code from the location. location[0]:0-5:face, location[1]:1-5:column, location[2]:1-5:row
+	int code = (location[0]*25)+((location[1]-1)*5)+location[2]-1;
+	return code;
 }
 
 void FriendedTone(){
@@ -2429,8 +2474,9 @@ void LoseGame(){
           // the note's duration + 30% seems to work well:
           int pauseBetweenNotes = noteDuration * 1.30;
           i=0;
-          while(i<(pauseBetweenNotes/7)){
+          while(i<(pauseBetweenNotes/9)){
             displayLEDs(LEDs);
+			transmitGameState();
             //delay(pauseBetweenNotes);
             i++;
           }
@@ -2494,33 +2540,36 @@ void SelectGame(){ //used after starting up for starting a game
 	//updateaccel(x,y,z);
 	StartUp();
 	TurnOffCubeLED();
-	TurnOnSingleLED(0,3,1,2);//top face show #1
-	TurnOnSingleLED(0,3,2,2);
+	TurnOnSingleLED(0,3,2,2);//top face show symbol #1
 	TurnOnSingleLED(0,3,3,2);
 	TurnOnSingleLED(0,3,4,2);
-	TurnOnSingleLED(0,3,5,2);
-	TurnOnSingleLED(4,1,2,2);//front face show #2
-	TurnOnSingleLED(4,1,3,2);
-	TurnOnSingleLED(4,1,4,2);
-	TurnOnSingleLED(4,2,4,2);
-	TurnOnSingleLED(4,3,2,2);
-	TurnOnSingleLED(4,3,3,2);
-	TurnOnSingleLED(4,3,4,2);
-	TurnOnSingleLED(4,4,2,2);
-	TurnOnSingleLED(4,5,4,2);
-	TurnOnSingleLED(4,5,3,2);
-	TurnOnSingleLED(4,5,2,2);
-	TurnOnSingleLED(3,2,1,2);//front face show #3
-	TurnOnSingleLED(3,3,1,2);
-	TurnOnSingleLED(3,4,1,2);
-	TurnOnSingleLED(3,2,2,2);
-	TurnOnSingleLED(3,4,3,2);
-	TurnOnSingleLED(3,3,3,2);
-	TurnOnSingleLED(3,2,3,2);
-	TurnOnSingleLED(3,2,4,2);
-	TurnOnSingleLED(3,4,5,2);
-	TurnOnSingleLED(3,3,5,2);
-	TurnOnSingleLED(3,2,5,2);
+	TurnOnSingleLED(0,2,3,0);
+	TurnOnSingleLED(0,4,3,1);
+	TurnOnColumn(4,1,2);//front face show #2
+	TurnOnColumn(4,3,2);
+	TurnOnColumn(4,5,2);
+	TurnOnRow(4,1,2);
+	TurnOnRow(4,3,2);
+	TurnOnRow(4,5,2);
+	TurnOnSingleLED(3,1,1,0);//top face show symbol #3
+	TurnOnSingleLED(3,1,2,0);
+	TurnOnSingleLED(3,2,1,0);
+	TurnOnSingleLED(3,2,2,0);
+	TurnOnSingleLED(3,5,5,0);
+	TurnOnSingleLED(3,5,4,0);
+	TurnOnSingleLED(3,4,5,0);
+	TurnOnSingleLED(3,4,4,0);
+	TurnOnSingleLED(3,2,4,1);
+	TurnOnFace(5,2);			//bottom face symbol game 5
+	TurnOnSingleLED(5,2,2,1);
+	TurnOnSingleLED(5,2,3,1);
+	TurnOnSingleLED(5,2,4,1);
+	TurnOnSingleLED(5,3,2,1);
+	TurnOnSingleLED(5,3,3,0);
+	TurnOnSingleLED(5,3,4,1);
+	TurnOnSingleLED(5,4,2,1);
+	TurnOnSingleLED(5,4,3,1);
+	TurnOnSingleLED(5,4,4,1);
 	int GameSelected = 6;
 	int i = 0;
 	int Testaccel = acceljerk(x,y,z);
@@ -2535,33 +2584,36 @@ void SelectGame(){ //used after starting up for starting a game
 		}
 	}
 	//change to green!
-	TurnOnSingleLED(0,3,1,1);//top face show #1
-	TurnOnSingleLED(0,3,2,1);
+	TurnOnSingleLED(0,3,2,1);//top face show symbol #1
 	TurnOnSingleLED(0,3,3,1);
 	TurnOnSingleLED(0,3,4,1);
-	TurnOnSingleLED(0,3,5,1);
-	TurnOnSingleLED(4,1,2,1);//front face show #2
-	TurnOnSingleLED(4,1,3,1);
-	TurnOnSingleLED(4,1,4,1);
-	TurnOnSingleLED(4,2,4,1);
-	TurnOnSingleLED(4,3,2,1);
-	TurnOnSingleLED(4,3,3,1);
-	TurnOnSingleLED(4,3,4,1);
-	TurnOnSingleLED(4,4,2,1);
-	TurnOnSingleLED(4,5,4,1);
-	TurnOnSingleLED(4,5,3,1);
-	TurnOnSingleLED(4,5,2,1);
-	TurnOnSingleLED(3,2,1,1);//front face show #3
-	TurnOnSingleLED(3,3,1,1);
-	TurnOnSingleLED(3,4,1,1);
+	TurnOnSingleLED(0,2,3,1);
+	TurnOnSingleLED(0,4,3,1);
+	TurnOnColumn(5,1,1);//front face show #2
+	TurnOnColumn(5,3,1);
+	TurnOnColumn(5,5,1);
+	TurnOnRow(5,1,1);
+	TurnOnRow(5,3,1);
+	TurnOnRow(5,5,1);
+	TurnOnSingleLED(3,1,1,1);//top face show symbol #3
+	TurnOnSingleLED(3,1,2,1);
+	TurnOnSingleLED(3,2,1,1);
 	TurnOnSingleLED(3,2,2,1);
-	TurnOnSingleLED(3,4,3,1);
-	TurnOnSingleLED(3,3,3,1);
-	TurnOnSingleLED(3,2,3,1);
-	TurnOnSingleLED(3,2,4,1);
+	TurnOnSingleLED(3,5,5,1);
+	TurnOnSingleLED(3,5,4,1);
 	TurnOnSingleLED(3,4,5,1);
-	TurnOnSingleLED(3,3,5,1);
-	TurnOnSingleLED(3,2,5,1);
+	TurnOnSingleLED(3,4,4,1);
+	TurnOnSingleLED(3,2,4,1);
+	TurnOnFace(5,1);			//bottom face symbol game 5
+	TurnOnSingleLED(5,2,2,1);
+	TurnOnSingleLED(5,2,3,1);
+	TurnOnSingleLED(5,2,4,1);
+	TurnOnSingleLED(5,3,2,1);
+	TurnOnSingleLED(5,3,3,1);
+	TurnOnSingleLED(5,3,4,1);
+	TurnOnSingleLED(5,4,2,1);
+	TurnOnSingleLED(5,4,3,1);
+	TurnOnSingleLED(5,4,4,1);
 	
 	i = 0;
 	while(i<20){
@@ -2570,6 +2622,7 @@ void SelectGame(){ //used after starting up for starting a game
 	}
 	i = 0;
 	int top = 0;
+	int five = 0;
 	int four = 0;
 	int three = 0;
 	int accelResult;
@@ -2584,16 +2637,21 @@ void SelectGame(){ //used after starting up for starting a game
 		if(accelResult == 3){
 			three = three++;
 		}
+		if(accelResult == 5){
+			five = five++;
+		}
 		i++;
 		displayLEDs(LEDs);
 	}
 	
-	if(top>four && top>three){
+	if(top>four && top>three && top>five){
 		GameState = 10;
-	}else if(four>top && four>three){
+	}else if(four>top && four>three && four>five){
 		GameState = 20;
-	}else{
+	}else if(three>top && three>four && three>five){
 		GameState = 30;
+	}else{
+		GameState = 50;
 	}
 	displayLEDs(LEDs);
 }
@@ -2704,13 +2762,6 @@ void StartGame1(){ //navigate your blue guy across the cube, don't hit the rails
 	  8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8, };	
 	int i = 0;
 
-	TurnOnSingleLED(0,1,2,0);//turn on red rails/maze: Should be 61 of them:
-	
-	// TurnOnSingleLED(4,3,3,1);//apple in the middle of front face
-	// TurnOnSingleLED(5,3,3,1);//apple in middle of bottom face
-	// TurnOnSingleLED(2,3,3,1);//apple in middle of back face
-	// TurnOnSingleLED(0,3,3,2);//Your starting spot, you're blue
-	
 	for (int thisNote = 0; thisNote < 3; thisNote++) {
    
 	  // to calculate the note duration, take one second 
@@ -2730,6 +2781,20 @@ void StartGame1(){ //navigate your blue guy across the cube, don't hit the rails
 	  }
 	  noTone(5);
 	}
+	TurnOnSingleLED(1,2,3,2);
+	TurnOnSingleLED(1,3,3,2);
+	TurnOnSingleLED(1,4,3,2);
+	TurnOnSingleLED(2,2,3,2);
+	TurnOnSingleLED(2,3,3,2);
+	TurnOnSingleLED(2,4,3,2);
+	TurnOnSingleLED(3,2,3,2);
+	TurnOnSingleLED(3,3,3,2);
+	TurnOnSingleLED(3,4,3,2);
+	TurnOnSingleLED(4,2,3,2);
+	TurnOnSingleLED(4,3,3,2);
+	TurnOnSingleLED(4,4,3,2);
+	TurnOnSingleLED(5,3,3,2);
+
 }
 
 void StartGameMusic(){
@@ -2753,12 +2818,555 @@ void StartGameMusic(){
 	}
 }
 
-void Game4(){ //run away from blocks
+void testWireless(){
+	digitalWrite(XbeeSleep, 0);
+	StartGame2();
+	int i = 0;
+	int transm = 0;
+	int info = 255;
+	while(1){
+		displayLEDs(LEDs);
+		
+		if(transm==0){
+			xbee.readPacket();
+			if (xbee.getResponse().isAvailable()) {  // got something
+				xbee.getResponse().getRx16Response(rx16);
+				Serial.print(" got somethin: ");
+				receivedGameState = (int) (rx16.getData(2)&255); 
+				Serial.println(receivedGameState);
+				displayLEDs(LEDs);
+			}
+		}else{
+			displayLEDs(LEDs);
+			displayLEDs(LEDs);
+			displayLEDs(LEDs);
+			displayLEDs(LEDs);
+			displayLEDs(LEDs);
+			displayLEDs(LEDs);
+			displayLEDs(LEDs);
+			payload[0] = 0;
+			payload[1] = 0;
+			payload[2] = info;
+			xbee.send(tx);
+			info--;
+			if(info==-1){
+				info=255;
+			}
+		}
+	
+	
+	}
+}
+
+void Game5(){ //multi-player, least amount of wiggle game
+	digitalWrite(XbeeSleep, 0);
+	TurnOffCubeLED();
+	TurnOnSingleLED(5,3,3,0);
 	StartGameMusic();
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	int playerCount = 0;
+	int playerList[25];
+	int playerResults[25];
+	int GameLength = 1000;
+	int receivedPlayerID;
+	int i;
+	int player[3];
+	int flag;
+	int xmin=0;
+	int xmax;
+	int ymin;
+	int ymax;
+	int zmin;
+	int zmax;
+	int offset=125;
+	
+	while(acceljerk(x,y,z)==0 && GameState==50){
+		xbee.readPacket();
+		if (xbee.getResponse().isAvailable()) {  // got something
+			xbee.getResponse().getRx16Response(rx16);
+			Serial.print(" got gamestate: ");
+			receivedGameState = (int) (rx16.getData(2)&255); 
+			receivedPlayerID = (int) (rx16.getData(0)&255); 
+			Serial.print(receivedGameState);
+			Serial.print(" ");
+			Serial.println(receivedPlayerID);
+			displayLEDs(LEDs);
+		}
+		if(receivedGameState==50){
+			i=0;
+			while(i<playerCount){
+				if((playerList[i])==receivedPlayerID){
+					receivedPlayerID=0; //says it's not a new player
+					Serial.println(" old ");
+				}
+				i++;
+			}
+			if(receivedPlayerID!=0){//it is a new player
+				Serial.println(receivedPlayerID);
+				playerList[playerCount] = receivedPlayerID;
+				decodeLED(player, playerCount+125);
+				TurnOnSingleLED(player[0],player[1],player[2],2);
+				playerCount++;
+			}
+		}
+		if(receivedGameState==50 && receivedPlayerID==XbeeID){
+			flag=1;
+			while(flag==1){
+				flag=0;
+				XbeeID=random(1,256);
+				i=0;
+				while(i<playerCount){
+					if(playerList[i]==XbeeID){
+						flag=1;
+					}
+					i++;
+				}
+			}
+		}
+		if(receivedGameState==51){
+			GameState=51;
+		}
+		transmitGameState();
+		displayLEDs(LEDs);
+	}
+	while(GameState==50||GameState==51){
+		GameState=51;
+		topPosition(player);
+		TurnOnCubeLED(1);
+		i=0;
+		while(i<80){
+			TurnOnCubeLED(1);
+			TurnOffSingleLED(player[0],player[1],player[2]);
+			topPosition(player);
+			TurnOnSingleLED(player[0],player[1],player[2],0);
+			transmitGameState();
+			displayLEDs(LEDs);
+			i++;
+		}
+		TurnOffCubeLED();
+		TurnOnFace(5,2);
+		i=0;
+		while(i<80){
+			TurnOnFace(5,2);
+			TurnOffSingleLED(player[0],player[1],player[2]);
+			topPosition(player);
+			TurnOnSingleLED(player[0],player[1],player[2],0);
+			transmitGameState();
+			displayLEDs(LEDs);
+			i++;
+		}
+		TurnOnSingleLED(5,2,2,1);
+		TurnOnSingleLED(5,2,3,1);
+		TurnOnSingleLED(5,2,4,1);
+		TurnOnSingleLED(5,3,2,1);
+		TurnOnSingleLED(5,3,3,1);
+		TurnOnSingleLED(5,3,4,1);
+		TurnOnSingleLED(5,4,2,1);
+		TurnOnSingleLED(5,4,3,1);
+		TurnOnSingleLED(5,4,4,1);
+		i=0;
+		while(i<80){
+			TurnOnFace(5,2);
+			TurnOnSingleLED(5,2,2,1);
+			TurnOnSingleLED(5,2,3,1);
+			TurnOnSingleLED(5,2,4,1);
+			TurnOnSingleLED(5,3,2,1);
+			TurnOnSingleLED(5,3,3,1);
+			TurnOnSingleLED(5,3,4,1);
+			TurnOnSingleLED(5,4,2,1);
+			TurnOnSingleLED(5,4,3,1);
+			TurnOnSingleLED(5,4,4,1);
+			TurnOffSingleLED(player[0],player[1],player[2]);
+			topPosition(player);
+			TurnOnSingleLED(player[0],player[1],player[2],0);
+			transmitGameState();
+			displayLEDs(LEDs);
+			i++;
+		}
+		GameState=52;
+	}
+	while(GameState==52){
+		StartGameMusic();
+		xmin = (int) analogRead(read_accel_x);
+		xmax = xmin;
+		ymin = (int) analogRead(read_accel_y);
+		ymax = ymin;
+		zmin = (int) analogRead(read_accel_z);
+		zmax = zmin;
+		i=0;
+		while(i<480){
+			TurnOnFace(5,2);
+			TurnOnSingleLED(5,2,2,1);
+			TurnOnSingleLED(5,2,3,1);
+			TurnOnSingleLED(5,2,4,1);
+			TurnOnSingleLED(5,3,2,1);
+			TurnOnSingleLED(5,3,3,1);
+			TurnOnSingleLED(5,3,4,1);
+			TurnOnSingleLED(5,4,2,1);
+			TurnOnSingleLED(5,4,3,1);
+			TurnOnSingleLED(5,4,4,1);
+			TurnOffSingleLED(player[0],player[1],player[2]);
+			topPosition(player);
+			TurnOnSingleLED(player[0],player[1],player[2],0);
+			flag = (int) analogRead(read_accel_x);
+			if(flag<xmin){
+				xmin=flag;
+			}else if(flag>xmax){
+				xmax=flag;
+			}
+			flag = (int) analogRead(read_accel_y);
+			if(flag<ymin){
+				ymin=flag;
+			}else if(flag>ymax){
+				ymax=flag;
+			}
+			flag = (int) analogRead(read_accel_z);
+			if(flag<zmin){
+				zmin=flag;
+			}else if(flag>zmax){
+				zmax=flag;
+			}
+			displayLEDs(LEDs);
+			i++;
+		}
+		codedPosition = ((xmax-xmin)+(ymax-ymin)+(zmax-zmin))/7;
+		Serial.println(codedPosition);
+		GameState=53;
+	}
+	while(GameState==53){
+		xbee.readPacket();
+		if (xbee.getResponse().isAvailable()) {  // got something
+			xbee.getResponse().getRx16Response(rx16);
+			Serial.print(" got gameresult: ");
+			receivedGameState = (int) (rx16.getData(1)&255); 
+			receivedPlayerID = (int) (rx16.getData(0)&255); 
+			Serial.print(receivedGameState);
+			Serial.print(" ");
+			Serial.println(receivedPlayerID);
+			displayLEDs(LEDs);
+		
+			i=0;
+			while(i<playerCount){
+				if(playerList[i]==receivedPlayerID){
+					playerResults[i]=receivedGameState;
+				}
+				i++;
+			}
+		}
+		transmitGameState();
+		displayLEDs(LEDs);
+		i=0;
+		flag=0;
+		while(i<playerCount){
+			if(playerResults[i]==0){
+				flag=1;
+			}
+			i++;
+		}
+		if(flag==0){
+			GameState=54;
+		}
+	}
+	while(GameState==54){ //55=lose, 56=win
+		i=0;
+		Serial.println("win or lose?");
+		while(i<playerCount){
+			if(codedPosition>playerResults[i]){
+				GameState=55; //you've lost
+				LoseGame();
+			}else{
+				GameState=56; //you've won
+				WinGame();
+			}
+			i++;
+		}
+		TurnOffCubeLED();
+		Serial.print("score: ");
+		Serial.println(codedPosition);
+		if(codedPosition>150){
+			codedPosition=150;
+		}
+		i=149;
+		while(i>(149-codedPosition)){
+			decodeLED(player, i);
+			TurnOnSingleLED(player[0],player[1],player[2],0);
+			i--;
+		}
+		i=0;
+		while(i<300){
+			displayLEDs(LEDs);
+			i++;
+		}
+		GameState=0;
+	}
+	digitalWrite(XbeeSleep, 1);
+	TurnOffCubeLED();
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+}
+
+void Game4(){ //3 player, chase NOT Working Yet
+	TurnOffCubeLED();
+	digitalWrite(XbeeSleep, 0); //wake up Xbee since it will be used now
+	StartGame1();
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	int i = 0;
+	int receivedGameState = 0;
+	int chase;
+	int run;
+	int player[3];
+	player[0] = 0; //face
+	player[1] = 3; //column
+	player[2] = 3; //row
+	int opponent[3];
+	opponent[0] = 0; //face
+	opponent[1] = 1; //column
+	opponent[2] = 1; //row
+	int opponent2[3];
+	opponent2[0] = 0; //face
+	opponent2[1] = 1; //column
+	opponent2[2] = 1; //row
+	int opponentCoded = 0;
+	
+	while(GameState>39 && GameState<43){
+		while(GameState==10){
+			displayLEDs(LEDs);
+			
+			xbee.readPacket();
+			if (xbee.getResponse().isAvailable()) {  // got something
+				xbee.getResponse().getRx16Response(rx16);
+				Serial.print(" got somethin: ");
+				receivedGameState = (int) (rx16.getData(2)&255); 
+				Serial.println(receivedGameState);
+				displayLEDs(LEDs);
+			}
+			if(receivedGameState==40 || receivedGameState==41){
+				GameState=41;
+			}
+			transmitGameState();
+			
+			TurnOffSingleLED(player[0],player[1],player[2]);
+			topPosition(player);
+			TurnOnSingleLED(player[0],player[1],player[2],1);
+			displayLEDs(LEDs);
+			TurnOnSingleLED(1,2,3,2);
+			TurnOnSingleLED(1,3,3,2);
+			TurnOnSingleLED(1,4,3,2);
+			TurnOnSingleLED(2,2,3,2);
+			TurnOnSingleLED(2,3,3,2);
+			TurnOnSingleLED(2,4,3,2);
+			TurnOnSingleLED(3,2,3,2);
+			TurnOnSingleLED(3,3,3,2);
+			TurnOnSingleLED(3,4,3,2);
+			TurnOnSingleLED(4,2,3,2);
+			TurnOnSingleLED(4,3,3,2);
+			TurnOnSingleLED(4,4,3,2);
+			TurnOnSingleLED(5,3,3,2);
+		}
+		FriendedTone();
+		while(!(receivedGameState==41 && receivedGameState==42) && GameState==41){
+			xbee.readPacket(); 
+			if (xbee.getResponse().isAvailable()) {  // got something
+				xbee.getResponse().getRx16Response(rx16);
+				Serial.print(" got somethin: ");
+				receivedGameState = (int) (rx16.getData(2)&255); 
+				Serial.println(receivedGameState);
+				displayLEDs(LEDs);
+			}
+			if(receivedGameState==41){
+				GameState=42;
+			}
+			
+			TurnOffSingleLED(player[0],player[1],player[2]);
+			topPosition(player);
+			TurnOnSingleLED(player[0],player[1],player[2],1);
+			transmitGameState();
+			displayLEDs(LEDs);
+			TurnOnSingleLED(1,2,3,2);
+			TurnOnSingleLED(1,3,3,2);
+			TurnOnSingleLED(1,4,3,2);
+			TurnOnSingleLED(2,2,3,2);
+			TurnOnSingleLED(2,3,3,2);
+			TurnOnSingleLED(2,4,3,2);
+			TurnOnSingleLED(3,2,3,2);
+			TurnOnSingleLED(3,3,3,2);
+			TurnOnSingleLED(3,4,3,2);
+			TurnOnSingleLED(4,2,3,2);
+			TurnOnSingleLED(4,3,3,2);
+			TurnOnSingleLED(4,4,3,2);
+			TurnOnSingleLED(5,3,3,2);
+		}
+		while(GameState==41||GameState==42){ //13=lose, 14=win
+			i++;
+			if(receivedGameState==42 && GameState==42 && random(2)==1){
+				i--;
+				Serial.print(" woah! ");
+				Serial.println(GameState);
+				GameState=41;
+			}else if(receivedGameState==41 && GameState==41 && random(2)==1){
+				i--;
+				Serial.print(" woah! ");
+				Serial.println(GameState);
+				GameState=42;
+			}
+			if(receivedGameState==42){
+				chase=1; //and GameState = 11;
+				run = 0;
+			}else{
+				chase=0; //run away! And GameState = 12;11
+				run = 1;
+			}
+			TurnOffSingleLED(player[0],player[1],player[2]);
+			topPosition(player);
+			TurnOnSingleLED(player[0],player[1],player[2],run);
+			codedPosition = encodeLED(player);
+			
+			xbee.readPacket(); 
+			if (xbee.getResponse().isAvailable()) {  // got something
+				xbee.getResponse().getRx16Response(rx16);
+				Serial.print(" got somethin: ");
+				receivedGameState = (int) (rx16.getData(2)&255); 
+				opponentCoded = (int) (rx16.getData(1)&255); 
+				Serial.print(receivedGameState);
+				Serial.print(" ");
+				Serial.println(opponentCoded);
+				
+				TurnOffSingleLED(opponent[0],opponent[1],opponent[2]);
+				decodeLED(opponent, opponentCoded);
+				displayLEDs(LEDs);
+			}
+			TurnOnSingleLED(opponent[0],opponent[1],opponent[2],chase);
+			
+			transmitGameState();
+			displayLEDs(LEDs);
+			
+			if(opponent[0]==player[0] && opponent[1]==player[1] && opponent[2]==player[2] && i>150){
+				if(chase==1){
+					GameState = 44; //you've won!
+					i=0;
+					while(i<40){
+						transmitGameState();
+						displayLEDs(LEDs);
+						i++;
+					}
+					WinGame();
+				}else{
+					GameState = 43; //you've lost
+					i=0;
+					while(i<40){
+						transmitGameState();
+						displayLEDs(LEDs);
+						i++;
+					}
+					LoseGame();
+				}
+			}else if(receivedGameState==44){
+				GameState = 43; //you've lost
+				i=0;
+				while(i<40){
+					transmitGameState();
+					displayLEDs(LEDs);
+					i++;
+				}
+				LoseGame();
+			}else if(receivedGameState==43){
+				GameState = 44; //you've won!
+				i=0;
+				while(i<40){
+					transmitGameState();
+					displayLEDs(LEDs);
+					i++;
+				}
+				WinGame();
+			}else if(player[0]==1||player[0]==2||player[0]==3||player[0]==4){
+				if(player[1]==2||player[1]==3||player[1]==4){
+					if(player[2]==3){
+						GameState = 43; //you've lost
+						i=0;
+						while(i<40){
+							transmitGameState();
+							displayLEDs(LEDs);
+							i++;
+						}
+						LoseGame();
+					}
+				}
+			}else if(player[0]==5 && player[1]==3 && player[2]==3){
+				GameState = 43; //you've lost
+				i=0;
+				while(i<40){
+					transmitGameState();
+					displayLEDs(LEDs);
+					i++;
+				}
+				LoseGame();
+			}
+			TurnOnSingleLED(1,2,3,2);
+			TurnOnSingleLED(1,3,3,2);
+			TurnOnSingleLED(1,4,3,2);
+			TurnOnSingleLED(2,2,3,2);
+			TurnOnSingleLED(2,3,3,2);
+			TurnOnSingleLED(2,4,3,2);
+			TurnOnSingleLED(3,2,3,2);
+			TurnOnSingleLED(3,3,3,2);
+			TurnOnSingleLED(3,4,3,2);
+			TurnOnSingleLED(4,2,3,2);
+			TurnOnSingleLED(4,3,3,2);
+			TurnOnSingleLED(4,4,3,2);
+			TurnOnSingleLED(5,3,3,2);
+		}
+		
+	}
+	digitalWrite(XbeeSleep, 1);
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	GameState = 0;
+}
+
+void Game3(){ //run away from blocks
+	// StartGameMusic();
 	TurnOffCubeLED();
 	//...
 	int i;
-	int GamePace = 35;
+	int GameTime = 0;
+	int GamePace = 50;
 	int movePitchB1 = 0;
 	int moveYawB1 = 1;
 	int moveRollB1 = 0;
@@ -2777,28 +3385,29 @@ void Game4(){ //run away from blocks
 	block2[0] = 0; //face
 	block2[1] = 3; //column
 	block2[2] = 3; //row
+	int blockColor = 0;
 	int PrevBlockFace1 = block1[0];
 	int PrevBlockFace2 = block2[0];
 	
-	while(1){
+	while(GameState==30){
 		if(PrevBlockFace1 != block1[0]){
 			i = 1;
 		}else{
 			i = 0;
 		}
 		PrevBlockFace1 = block1[0];
-		if(block1[0]==0 || block1[0]==5 || i==1){
-			if((int) random(5) == 1){
+		if(block1[0]==0 || block1[0]==5){
+			if((int) random(5)==1 || i==1){
 				movePitchB1 = random(3) - 1;
 				moveRollB1 = random(3) - 1;
 			}
 		}else if(block1[0]==2 || block1[0]==4){
-			if((int) random(5) == 1){
+			if((int) random(5) == 1 || i==1){
 				movePitchB1 = random(3) - 1;
 				moveYawB1 = random(3) - 1;
 			}
 		}else{
-			if((int) random(5) == 1){
+			if((int) random(5) == 1 || i==1){
 				moveYawB1 = random(3) - 1;
 				moveRollB1 = random(3) - 1;
 			}
@@ -2810,24 +3419,24 @@ void Game4(){ //run away from blocks
 			i = 0;
 		}
 		PrevBlockFace2 = block2[0];
-		if(block2[0]==0 || block2[0]==5 || i==1){
-			if((int) random(5) == 1){
+		if(block2[0]==0 || block2[0]==5){
+			if((int) random(5) == 1 || i==1){
 				movePitchB2 = random(3) - 1;
 				moveRollB2 = random(3) - 1;
 			}
 		}else if(block2[0]==2 || block2[0]==4){
-			if((int) random(5) == 1){
+			if((int) random(5) == 1 || i==1){
 				movePitchB2 = random(3) - 1;
 				moveYawB2 = random(3) - 1;
 			}
 		}else{
-			if((int) random(5) == 1){
+			if((int) random(5) == 1 || i==1){
 				moveYawB2 = random(3) - 1;
 				moveRollB2 = random(3) - 1;
 			}
 		}
-		MoveBlock(block1, movePitchB1, moveYawB1, moveRollB1, 0);
-		MoveBlock(block2, movePitchB2, moveYawB2, moveRollB2, 0);
+		MoveBlock(block1, movePitchB1, moveYawB1, moveRollB1, blockColor);
+		MoveBlock(block2, movePitchB2, moveYawB2, moveRollB2, blockColor);
 		displayLEDs(LEDs);
 		TurnOffSingleLED(player[0],player[1],player[2]);
 		topPosition(player);
@@ -2835,66 +3444,77 @@ void Game4(){ //run away from blocks
 		
 		i = 0;
 		while(i<GamePace){
+			
+			CreateBlock(block1,blockColor);
+			CreateBlock(block2,blockColor);
 			displayLEDs(LEDs);
+			if(LEDs[(player[0])][(player[1]-1)][(player[2]*3)]==1){ //player has collided with a Red LED = block
+				TurnOnSingleLED(player[0],player[1],player[2],1);
+				i=0;
+				while(i<35){
+					displayLEDs(LEDs);
+					i++;
+				}
+				LoseGame();
+				GameState = 0;
+				return;
+			}else if(LEDs[(player[0])][(player[1]-1)][((player[2]*3)-2)]==1){
+				TurnOnSingleLED(player[0],player[1],player[2],1);
+				i=0;
+				while(i<35){
+					displayLEDs(LEDs);
+					i++;
+				}
+				LoseGame();
+				GameState = 0;
+				return;
+			}
+			
 			TurnOffSingleLED(player[0],player[1],player[2]);
 			topPosition(player);
 			TurnOnSingleLED(player[0],player[1],player[2],1);
+			
 			i++;
 		}
+		if(GameTime==45){
+			GamePace = GamePace - 10;
+			GameTime=0;
+			blockColor++;
+			if(blockColor==1){
+				blockColor=2;
+			}else if(blockColor==6){
+				blockColor=0;
+			}
+			Serial.println("SPEED UP!");
+			if(GamePace<2){
+				GamePace = 2;
+			}
+		}
+		GameTime++;
 	}
-	
-	
-	
 }
 
-void Game3(){ //top face game
-	updateaccel(x,y,z);
-	int i = 0;
-	StartGame3();
-	i = random(6);
-	while(i == acceltop(x,y,z)){
-	  i = random(6);
-	}
-	TurnOffCubeLED();
-	
-	TurnOnColumn(i,1,2);
-	TurnOnColumn(i,2,2);
-	TurnOnColumn(i,3,2);
-	TurnOnColumn(i,4,2);
-	TurnOnColumn(i,5,2);
-	while(acceltop(x,y,z)!=i){
-	  displayLEDs(LEDs);
-		if(GameState==-1){
-			return;
-		}
-	}
-	WinGame();
-	GameState = 0;
-} 
-
-void Game2(){ //multi player reflexes game
+void Game2(){ //2 players reflexes game
 	digitalWrite(XbeeSleep, 0); //wake up Xbee since it will be used now
-	updateaccel(x,y,z);
 	int i = 0;
-	GameState = 20;
+	GameState = 150;
 	StartGame2();
 	transmitGameState();
 	receivedGameState = 0;
-	while(!(receivedGameState==20 || receivedGameState==25)){ //wait until a partner is doing Game2
+	while(!(receivedGameState==20 || receivedGameState==21)){ //wait until a partner is doing Game2
 		displayLEDs(LEDs);
-		xbee.readPacket(); //this method has less delay than (xbee.readPacket(1)
 		
+		xbee.readPacket(); //this method has less delay than (xbee.readPacket(1)
 		if (xbee.getResponse().isAvailable()) {  // got something
 			xbee.getResponse().getRx16Response(rx16);
 			Serial.print(" got somethin: ");
-			receivedGameState = (int) (rx16.getData(30)&31); //where the color ID is, can be used for GameState too (why not?)
+			receivedGameState = (int) (rx16.getData(2)&255); //ORIGINALLY 30 NOT 2. ORIGINALLY 31 NOT 63. where the color ID is, can be used for GameState too (why not?)
 			Serial.println(receivedGameState);
 			displayLEDs(LEDs);
 		}
 		transmitGameState();
 		
 		if(GameState==-1){
-			digitalWrite(XbeeSleep, 1);
 			return;
 		}
 	}
@@ -2908,21 +3528,20 @@ void Game2(){ //multi player reflexes game
 		transmitGameState();
 		i--;
 		if(GameState==-1){
-			digitalWrite(XbeeSleep, 1);
 			return;
 		}
 	}
 	Serial.println(" ready to ShowOff ");
-	GameState = 25; //means that it's ready to ShowOff
+	GameState = 21; //means that it's ready to ShowOff
 	transmitGameState(); //tell the friend that it's ready to ShowOff
 	i = 0;
-	while(!(receivedGameState==25 || receivedGameState==27)){ //wait until the friend is ready to ShowOff too
+	while(!(receivedGameState==21 || receivedGameState==22)){ //wait until the friend is ready to ShowOff too
 		displayLEDs(LEDs);
 		xbee.readPacket();
 		
 		if (xbee.getResponse().isAvailable()) {  // got something
 			xbee.getResponse().getRx16Response(rx16);
-			receivedGameState = (int) (rx16.getData(30)&31); //where the color ID is, can be used for GameState too (why not?)
+			receivedGameState = (int) (rx16.getData(2)&31); //where the color ID is, can be used for GameState too (why not?)
 			displayLEDs(LEDs);
 			Serial.print(" got somethin after friended: ");
 			Serial.println(receivedGameState);
@@ -2930,12 +3549,11 @@ void Game2(){ //multi player reflexes game
 		transmitGameState();
 		
 		if(GameState==-1){
-			digitalWrite(XbeeSleep, 1);
 			return;
 		}
 	}
-	if(receivedGameState!=27){
-		GameState = 27;//means that it's ready to ShowOff and it has a head start
+	if(receivedGameState!=22){
+		GameState = 22;//means that it's ready to ShowOff and it has a head start
 		i = 0;
 		Serial.println("head start begin");
 		while(i<100){
@@ -2946,30 +3564,29 @@ void Game2(){ //multi player reflexes game
 		Serial.println("head start end");
 	}
 
-	while(receivedGameState!=29 && acceljerk(x,y,z)==0){ //no one has won yet
+	while(receivedGameState!=23 && acceljerk(x,y,z)==0){ //no one has won yet
 		ShowOff();
 		displayLEDs(LEDs);
 		xbee.readPacket();
 		if (xbee.getResponse().isAvailable()) {  // got something
 			xbee.getResponse().getRx16Response(rx16);
-			receivedGameState = (int) (rx16.getData(30)&31); //where the color ID is, can be used for GameState too (why not?)
+			receivedGameState = (int) (rx16.getData(2)&31); //where the color ID is, can be used for GameState too (why not?)
 			displayLEDs(LEDs);
 		}
 		
 		if(GameState==-1){
-			digitalWrite(XbeeSleep, 1);
 			return;
 		}
 		
-		GameState = 27;
+		GameState = 22;
 		transmitGameState();
 	}
 	
-	if(receivedGameState == 29){
+	if(receivedGameState == 23){
 		LoseGame();
 		Serial.println("LOSE");
 	}else{
-		GameState = 29;
+		GameState = 23;
 		i = 0;
 		while(i<25){
 			displayLEDs(LEDs);
@@ -2987,7 +3604,6 @@ void Game2(){ //multi player reflexes game
 	}
 	
 	if(GameState==-1){
-		digitalWrite(XbeeSleep, 1);
 		return;
 	}
 	
@@ -2995,55 +3611,238 @@ void Game2(){ //multi player reflexes game
 	digitalWrite(XbeeSleep, 1); //put xbee back to sleep to save battery
 }
 
-void Game1(){ //maze game
-	updateaccel(x,y,z);
+void Game1(){ //2 player, chase 
+	TurnOffCubeLED();
+	digitalWrite(XbeeSleep, 0); //wake up Xbee since it will be used now
 	StartGame1();
-	int solvedFaces[] = {6,6,6,6,6};
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
 	int i = 0;
-        Serial.println("game 1");
-	while(GameState<18 && GameState>9){ //GameState=18 for Lose, GameState=19 for Win
-		//Serial.println(GameState);
-		int absFace = 0; //for storing the accelerometer result
-		int absColumn = 2;
-		int absRow = 2;
-		int memFace = 0; //for turning off the LED where you were a bit ago
-		int memColumn = 2;
-		int memRow = 2;
-		absFace = acceltop(x, y, z); //Kent's accelerometer code
-		if(absFace!=0 && absFace!=1 && absFace!=3 ){ //if you've ate an apple
-			if(solvedFaces[0]!=absFace && solvedFaces[1]!=absFace && solvedFaces[2]!=absFace && solvedFaces[3]!=absFace && solvedFaces[4]!=absFace){
-				GameState++; //ate an apple, advance in game
-				solvedFaces[i] = absFace; // record that that face was solved
-				i++;
-				if(i==3){ //you've ate all the apples! you win
-					GameState = 19;//win
-				}
+	int receivedGameState = 0;
+	int chase;
+	int run;
+	int player[3];
+	player[0] = 0; //face
+	player[1] = 3; //column
+	player[2] = 3; //row
+	int opponent[3];
+	opponent[0] = 0; //face
+	opponent[1] = 1; //column
+	opponent[2] = 1; //row
+	int opponentCoded = 0;
+	
+	while(GameState>9 && GameState<13){
+		while(GameState==10){
+			displayLEDs(LEDs);
+			
+			xbee.readPacket();
+			if (xbee.getResponse().isAvailable()) {  // got something
+				xbee.getResponse().getRx16Response(rx16);
+				Serial.print(" got somethin: ");
+				receivedGameState = (int) (rx16.getData(2)&255); 
+				Serial.println(receivedGameState);
+				displayLEDs(LEDs);
 			}
+			if(receivedGameState==10 || receivedGameState==11){
+				GameState=11;
+			}
+			transmitGameState();
+			
+			TurnOffSingleLED(player[0],player[1],player[2]);
+			topPosition(player);
+			TurnOnSingleLED(player[0],player[1],player[2],1);
+			displayLEDs(LEDs);
+			TurnOnSingleLED(1,2,3,2);
+			TurnOnSingleLED(1,3,3,2);
+			TurnOnSingleLED(1,4,3,2);
+			TurnOnSingleLED(2,2,3,2);
+			TurnOnSingleLED(2,3,3,2);
+			TurnOnSingleLED(2,4,3,2);
+			TurnOnSingleLED(3,2,3,2);
+			TurnOnSingleLED(3,3,3,2);
+			TurnOnSingleLED(3,4,3,2);
+			TurnOnSingleLED(4,2,3,2);
+			TurnOnSingleLED(4,3,3,2);
+			TurnOnSingleLED(4,4,3,2);
+			TurnOnSingleLED(5,3,3,2);
 		}
-		if(absFace==1 || absFace==3){ //you've gone out of bounds, lose
-			GameState = 18;//you lose
-                        Serial.println("hey1");
-		}/*else if((absFace==4 || absFace==2) && (absRow==1 || absRow==5)){//you've hit the rails, lose
-			GameState = 18;//you lose
-                        Serial.println("hey2");
-		}else if((absFace==5 || absFace==0) && (absColumn==1 || absColumn==5)){//you've hit the rails, lose
-			GameState = 18;//you lose
-                        Serial.println("hey3");
-		}*/
-		TurnOffSingleLED(memFace,3,3); //turn off the LED where you were last
-		TurnOnSingleLED(absFace,3,3, 2); //turn on blue LED where you are
-		memFace = absFace;
-		displayLEDs(LEDs);
+		FriendedTone();
+		while(!(receivedGameState==11 && receivedGameState==12) && GameState==11){
+			xbee.readPacket(); 
+			if (xbee.getResponse().isAvailable()) {  // got something
+				xbee.getResponse().getRx16Response(rx16);
+				Serial.print(" got somethin: ");
+				receivedGameState = (int) (rx16.getData(2)&255); 
+				Serial.println(receivedGameState);
+				displayLEDs(LEDs);
+			}
+			if(receivedGameState==11){
+				GameState=12;
+			}
+			
+			TurnOffSingleLED(player[0],player[1],player[2]);
+			topPosition(player);
+			TurnOnSingleLED(player[0],player[1],player[2],1);
+			transmitGameState();
+			displayLEDs(LEDs);
+			TurnOnSingleLED(1,2,3,2);
+			TurnOnSingleLED(1,3,3,2);
+			TurnOnSingleLED(1,4,3,2);
+			TurnOnSingleLED(2,2,3,2);
+			TurnOnSingleLED(2,3,3,2);
+			TurnOnSingleLED(2,4,3,2);
+			TurnOnSingleLED(3,2,3,2);
+			TurnOnSingleLED(3,3,3,2);
+			TurnOnSingleLED(3,4,3,2);
+			TurnOnSingleLED(4,2,3,2);
+			TurnOnSingleLED(4,3,3,2);
+			TurnOnSingleLED(4,4,3,2);
+			TurnOnSingleLED(5,3,3,2);
+		}
+		while(GameState==11||GameState==12){ //13=lose, 14=win
+			i++;
+			if(receivedGameState==12 && GameState==12 && random(2)==1){
+				i--;
+				Serial.print(" woah! ");
+				Serial.println(GameState);
+				GameState=11;
+			}else if(receivedGameState==11 && GameState==11 && random(2)==1){
+				i--;
+				Serial.print(" woah! ");
+				Serial.println(GameState);
+				GameState=12;
+			}
+			if(receivedGameState==12){
+				chase=1; //and GameState = 11;
+				run = 0;
+			}else{
+				chase=0; //run away! And GameState = 12;11
+				run = 1;
+			}
+			TurnOffSingleLED(player[0],player[1],player[2]);
+			topPosition(player);
+			TurnOnSingleLED(player[0],player[1],player[2],run);
+			codedPosition = encodeLED(player);
+			
+			xbee.readPacket(); 
+			if (xbee.getResponse().isAvailable()) {  // got something
+				xbee.getResponse().getRx16Response(rx16);
+				Serial.print(" got somethin: ");
+				receivedGameState = (int) (rx16.getData(2)&255); 
+				opponentCoded = (int) (rx16.getData(1)&255); 
+				Serial.print(receivedGameState);
+				Serial.print(" ");
+				Serial.println(opponentCoded);
+				
+				TurnOffSingleLED(opponent[0],opponent[1],opponent[2]);
+				decodeLED(opponent, opponentCoded);
+				displayLEDs(LEDs);
+			}
+			TurnOnSingleLED(opponent[0],opponent[1],opponent[2],chase);
+			
+			transmitGameState();
+			displayLEDs(LEDs);
+			
+			if(opponent[0]==player[0] && opponent[1]==player[1] && opponent[2]==player[2] && i>150){
+				if(chase==1){
+					GameState = 14; //you've won!
+					i=0;
+					while(i<40){
+						transmitGameState();
+						displayLEDs(LEDs);
+						i++;
+					}
+					WinGame();
+				}else{
+					GameState = 13; //you've lost
+					i=0;
+					while(i<40){
+						transmitGameState();
+						displayLEDs(LEDs);
+						i++;
+					}
+					LoseGame();
+				}
+			}else if(receivedGameState==14){
+				GameState = 13; //you've lost
+				i=0;
+				while(i<40){
+					transmitGameState();
+					displayLEDs(LEDs);
+					i++;
+				}
+				LoseGame();
+			}else if(receivedGameState==13){
+				GameState = 14; //you've won!
+				i=0;
+				while(i<40){
+					transmitGameState();
+					displayLEDs(LEDs);
+					i++;
+				}
+				WinGame();
+			}else if(player[0]==1||player[0]==2||player[0]==3||player[0]==4){
+				if(player[1]==2||player[1]==3||player[1]==4){
+					if(player[2]==3){
+						GameState = 13; //you've lost
+						i=0;
+						while(i<40){
+							transmitGameState();
+							displayLEDs(LEDs);
+							i++;
+						}
+						LoseGame();
+					}
+				}
+			}else if(player[0]==5 && player[1]==3 && player[2]==3){
+				GameState = 13; //you've lost
+				i=0;
+				while(i<40){
+					transmitGameState();
+					displayLEDs(LEDs);
+					i++;
+				}
+				LoseGame();
+			}
+			TurnOnSingleLED(1,2,3,2);
+			TurnOnSingleLED(1,3,3,2);
+			TurnOnSingleLED(1,4,3,2);
+			TurnOnSingleLED(2,2,3,2);
+			TurnOnSingleLED(2,3,3,2);
+			TurnOnSingleLED(2,4,3,2);
+			TurnOnSingleLED(3,2,3,2);
+			TurnOnSingleLED(3,3,3,2);
+			TurnOnSingleLED(3,4,3,2);
+			TurnOnSingleLED(4,2,3,2);
+			TurnOnSingleLED(4,3,3,2);
+			TurnOnSingleLED(4,4,3,2);
+			TurnOnSingleLED(5,3,3,2);
+		}
+		
 	}
-        Serial.println(GameState);
-	if(GameState==18){
-		LoseGame();
-		GameState = 0;
-	}else if(GameState==19){
-		WinGame();
-		GameState = 0;
-	}
-	//GameState = 0;
+	digitalWrite(XbeeSleep, 1);
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	GameState = 0;
 }
 
 int idle(){
@@ -3092,7 +3891,6 @@ void TestFaces(){
 }
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
-
 void loop() {
 	// int color = 0;
 	// int location[3];
@@ -3100,11 +3898,10 @@ void loop() {
 	// location[1] = 4; //column
 	// location[2] = 4; //row
 	// while(1){
-		// displayLEDs(LEDs);
-		// topPosition(location);
-		// TurnOnSingleLED(location[0],location[1],location[2], color);
+		// GameState=50;
+		// Game5();
 	// }
-	// Game4();
+	// Game3();
 	
 	while(GameState == -1){   
 		GameState = idle();
@@ -3118,6 +3915,8 @@ void loop() {
 		Game2();
 	}else if(GameState == 30){
 		Game3();
+	}else if(GameState == 50){
+		Game5();
 	}
 	
 	// Serial.println("hey");
