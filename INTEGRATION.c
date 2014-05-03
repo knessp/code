@@ -3080,16 +3080,22 @@ void Game5(){ //multi-player, least amount of wiggle game
 	}
 	while(GameState==54){ //55=lose, 56=win
 		i=0;
+		flag=0;
 		Serial.println("win or lose?");
 		while(i<playerCount){
 			if(codedPosition>playerResults[i]){
 				GameState=55; //you've lost
 				LoseGame();
-			}else{
-				GameState=56; //you've won
-				WinGame();
-			}
+				flag=1;
+			} //else{
+				// GameState=56; //you've won
+				// WinGame();
+			// }
 			i++;
+		}
+		if(flag==0){
+			GameState=56; //you've won
+			WinGame();
 		}
 		TurnOffCubeLED();
 		Serial.print("score: ");
@@ -3482,12 +3488,13 @@ void Game3(){ //run away from blocks
 			blockColor++;
 			if(blockColor==1){
 				blockColor=2;
-			}else if(blockColor==6){
-				blockColor=0;
+			}else if(blockColor==7){
+				WinGame();
+				GameState = 0;
 			}
 			Serial.println("SPEED UP!");
-			if(GamePace<2){
-				GamePace = 2;
+			if(GamePace<4){
+				GamePace = 4;
 			}
 		}
 		GameTime++;
