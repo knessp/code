@@ -2903,7 +2903,7 @@ void Game5(){ //multi-player, least amount of wiggle game
 			Serial.println(receivedPlayerID);
 			displayLEDs(LEDs);
 		}
-		if(receivedGameState==50){
+		if(receivedGameState==50 && GameState==50){
 			i=0;
 			while(i<playerCount){
 				if((playerList[i])==receivedPlayerID){
@@ -2920,7 +2920,7 @@ void Game5(){ //multi-player, least amount of wiggle game
 				playerCount++;
 			}
 		}
-		if(receivedGameState==50 && receivedPlayerID==XbeeID){
+		if(receivedGameState==50 && receivedPlayerID==XbeeID && GameState==50){
 			flag=1;
 			while(flag==1){
 				flag=0;
@@ -2934,7 +2934,7 @@ void Game5(){ //multi-player, least amount of wiggle game
 				}
 			}
 		}
-		if(receivedGameState==51){
+		if(receivedGameState==51 && GameState==50){
 			GameState=51;
 		}
 		transmitGameState();
@@ -2994,7 +2994,9 @@ void Game5(){ //multi-player, least amount of wiggle game
 			displayLEDs(LEDs);
 			i++;
 		}
-		GameState=52;
+		if(GameState==51){
+			GameState=52;
+		}
 	}
 	while(GameState==52){
 		StartGameMusic();
@@ -3042,7 +3044,9 @@ void Game5(){ //multi-player, least amount of wiggle game
 		}
 		codedPosition = ((xmax-xmin)+(ymax-ymin)+(zmax-zmin))/7;
 		Serial.println(codedPosition);
-		GameState=53;
+		if(GameState==52){
+			GameState=53;
+		}
 	}
 	while(GameState==53){
 		xbee.readPacket();
@@ -3074,7 +3078,7 @@ void Game5(){ //multi-player, least amount of wiggle game
 			}
 			i++;
 		}
-		if(flag==0){
+		if(flag==0 && GameState==53){
 			GameState=54;
 		}
 	}
@@ -3082,7 +3086,7 @@ void Game5(){ //multi-player, least amount of wiggle game
 		i=0;
 		flag=0;
 		Serial.println("win or lose?");
-		while(i<playerCount){
+		while(i<playerCount && GameState==54){
 			if(codedPosition>playerResults[i]){
 				GameState=55; //you've lost
 				LoseGame();
@@ -3093,28 +3097,30 @@ void Game5(){ //multi-player, least amount of wiggle game
 			// }
 			i++;
 		}
-		if(flag==0){
+		if(flag==0 && GameState==54){
 			GameState=56; //you've won
 			WinGame();
 		}
-		TurnOffCubeLED();
-		Serial.print("score: ");
-		Serial.println(codedPosition);
-		if(codedPosition>150){
-			codedPosition=150;
+		if(GameState==55 || GameState==56){
+			TurnOffCubeLED();
+			Serial.print("score: ");
+			Serial.println(codedPosition);
+			if(codedPosition>150){
+				codedPosition=150;
+			}
+			i=149;
+			while(i>(149-codedPosition)){
+				decodeLED(player, i);
+				TurnOnSingleLED(player[0],player[1],player[2],0);
+				i--;
+			}
+			i=0;
+			while(i<300){
+				displayLEDs(LEDs);
+				i++;
+			}
+			GameState=0;
 		}
-		i=149;
-		while(i>(149-codedPosition)){
-			decodeLED(player, i);
-			TurnOnSingleLED(player[0],player[1],player[2],0);
-			i--;
-		}
-		i=0;
-		while(i<300){
-			displayLEDs(LEDs);
-			i++;
-		}
-		GameState=0;
 	}
 	digitalWrite(XbeeSleep, 1);
 	TurnOffCubeLED();
@@ -3504,11 +3510,23 @@ void Game3(){ //run away from blocks
 void Game2(){ //2 players reflexes game
 	digitalWrite(XbeeSleep, 0); //wake up Xbee since it will be used now
 	int i = 0;
-	GameState = 150;
+	GameState = 20;
 	StartGame2();
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
 	transmitGameState();
 	receivedGameState = 0;
-	while(!(receivedGameState==20 || receivedGameState==21)){ //wait until a partner is doing Game2
+	while((!(receivedGameState==20 || receivedGameState==21)) && GameState==20){ //wait until a partner is doing Game2
 		displayLEDs(LEDs);
 		
 		xbee.readPacket(); //this method has less delay than (xbee.readPacket(1)
@@ -3521,28 +3539,30 @@ void Game2(){ //2 players reflexes game
 		}
 		transmitGameState();
 		
-		if(GameState==-1){
-			return;
-		}
+		// if(GameState==-1){
+			// return;
+		// }
 	}
-	Serial.println("i found a friend");
-    displayLEDs(LEDs);
-	transmitGameState();
-	FriendedTone(); //show that a friend was found and the game can start now
-	i = random(600)+100;
-	while(i>0){ // wait for a random amount of time
+	if(GameState==20){
+		Serial.println("i found a friend");
 		displayLEDs(LEDs);
 		transmitGameState();
-		i--;
-		if(GameState==-1){
-			return;
+		FriendedTone(); //show that a friend was found and the game can start now
+		i = random(600)+100;
+		while(i>0){ // wait for a random amount of time
+			displayLEDs(LEDs);
+			transmitGameState();
+			i--;
+			if(GameState==-1){
+				return;
+			}
 		}
+		Serial.println(" ready to ShowOff ");
+		GameState = 21; //means that it's ready to ShowOff
+		transmitGameState(); //tell the friend that it's ready to ShowOff
+		i = 0;
 	}
-	Serial.println(" ready to ShowOff ");
-	GameState = 21; //means that it's ready to ShowOff
-	transmitGameState(); //tell the friend that it's ready to ShowOff
-	i = 0;
-	while(!(receivedGameState==21 || receivedGameState==22)){ //wait until the friend is ready to ShowOff too
+	while((!(receivedGameState==21 || receivedGameState==22)) && GameState==21){ //wait until the friend is ready to ShowOff too
 		displayLEDs(LEDs);
 		xbee.readPacket();
 		
@@ -3555,11 +3575,11 @@ void Game2(){ //2 players reflexes game
 		}
 		transmitGameState();
 		
-		if(GameState==-1){
-			return;
-		}
+		// if(GameState==-1){
+			// return;
+		// }
 	}
-	if(receivedGameState!=22){
+	if(receivedGameState!=22 && GameState==21){
 		GameState = 22;//means that it's ready to ShowOff and it has a head start
 		i = 0;
 		Serial.println("head start begin");
@@ -3569,9 +3589,11 @@ void Game2(){ //2 players reflexes game
 			i++;
 		 }
 		Serial.println("head start end");
+	}else if(GameState==21){
+		GameState = 22;
 	}
 
-	while(receivedGameState!=23 && acceljerk(x,y,z)==0){ //no one has won yet
+	while(receivedGameState!=23 && acceljerk(x,y,z)==0 && GameState==22){ //no one has won yet
 		ShowOff();
 		displayLEDs(LEDs);
 		xbee.readPacket();
@@ -3581,18 +3603,18 @@ void Game2(){ //2 players reflexes game
 			displayLEDs(LEDs);
 		}
 		
-		if(GameState==-1){
-			return;
-		}
+		// if(GameState==-1){
+			// return;
+		// }
 		
-		GameState = 22;
+		// GameState = 22;
 		transmitGameState();
 	}
 	
 	if(receivedGameState == 23){
 		LoseGame();
 		Serial.println("LOSE");
-	}else{
+	}else if(GameState == 22){ //means user must have shaken it before opponent
 		GameState = 23;
 		i = 0;
 		while(i<25){
@@ -3610,12 +3632,21 @@ void Game2(){ //2 players reflexes game
 		Serial.println("WIN");
 	}
 	
-	if(GameState==-1){
-		return;
+	if(GameState!=-1){
+		GameState = 0; //go back to game selection screen
+		digitalWrite(XbeeSleep, 1); //put xbee back to sleep to save battery
 	}
-	
-	GameState = 0; //go back to game selection screen
-	digitalWrite(XbeeSleep, 1); //put xbee back to sleep to save battery
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
+	xbee.readPacket(); 
 }
 
 void Game1(){ //2 player, chase 
@@ -3660,7 +3691,7 @@ void Game1(){ //2 player, chase
 				Serial.println(receivedGameState);
 				displayLEDs(LEDs);
 			}
-			if(receivedGameState==10 || receivedGameState==11){
+			if((receivedGameState==10 || receivedGameState==11) && GameState==10){
 				GameState=11;
 			}
 			transmitGameState();
@@ -3683,7 +3714,9 @@ void Game1(){ //2 player, chase
 			TurnOnSingleLED(4,4,3,2);
 			TurnOnSingleLED(5,3,3,2);
 		}
-		FriendedTone();
+		if(GameState==11){
+			FriendedTone();
+		}
 		while(!(receivedGameState==11 && receivedGameState==12) && GameState==11){
 			xbee.readPacket(); 
 			if (xbee.getResponse().isAvailable()) {  // got something
@@ -3693,7 +3726,7 @@ void Game1(){ //2 player, chase
 				Serial.println(receivedGameState);
 				displayLEDs(LEDs);
 			}
-			if(receivedGameState==11){
+			if(receivedGameState==11 && GameState==11){
 				GameState=12;
 			}
 			
@@ -3837,7 +3870,10 @@ void Game1(){ //2 player, chase
 		}
 		
 	}
-	digitalWrite(XbeeSleep, 1);
+	if(GameState!=-1){
+		digitalWrite(XbeeSleep, 1);
+		GameState = 0;
+	}
 	xbee.readPacket(); 
 	xbee.readPacket(); 
 	xbee.readPacket(); 
@@ -3849,7 +3885,7 @@ void Game1(){ //2 player, chase
 	xbee.readPacket(); 
 	xbee.readPacket(); 
 	xbee.readPacket(); 
-	GameState = 0;
+	
 }
 
 int idle(){
