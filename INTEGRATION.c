@@ -2589,12 +2589,12 @@ void SelectGame(){ //used after starting up for starting a game
 	TurnOnSingleLED(0,3,4,1);
 	TurnOnSingleLED(0,2,3,1);
 	TurnOnSingleLED(0,4,3,1);
-	TurnOnColumn(5,1,1);//front face show #2
-	TurnOnColumn(5,3,1);
-	TurnOnColumn(5,5,1);
-	TurnOnRow(5,1,1);
-	TurnOnRow(5,3,1);
-	TurnOnRow(5,5,1);
+	TurnOnColumn(4,1,1);//front face show #2
+	TurnOnColumn(4,3,1);
+	TurnOnColumn(4,5,1);
+	TurnOnRow(4,1,1);
+	TurnOnRow(4,3,1);
+	TurnOnRow(4,5,1);
 	TurnOnSingleLED(3,1,1,1);//top face show symbol #3
 	TurnOnSingleLED(3,1,2,1);
 	TurnOnSingleLED(3,2,1,1);
@@ -2781,19 +2781,20 @@ void StartGame1(){ //navigate your blue guy across the cube, don't hit the rails
 	  }
 	  noTone(5);
 	}
-	TurnOnSingleLED(1,2,3,2);
-	TurnOnSingleLED(1,3,3,2);
-	TurnOnSingleLED(1,4,3,2);
-	TurnOnSingleLED(2,2,3,2);
-	TurnOnSingleLED(2,3,3,2);
-	TurnOnSingleLED(2,4,3,2);
-	TurnOnSingleLED(3,2,3,2);
-	TurnOnSingleLED(3,3,3,2);
-	TurnOnSingleLED(3,4,3,2);
-	TurnOnSingleLED(4,2,3,2);
-	TurnOnSingleLED(4,3,3,2);
-	TurnOnSingleLED(4,4,3,2);
-	TurnOnSingleLED(5,3,3,2);
+	TurnOnRow(4,1,2);
+	TurnOnRow(2,1,2);
+	// TurnOnSingleLED(1,3,3,2);
+	// TurnOnSingleLED(1,4,3,2);
+	// TurnOnSingleLED(2,2,3,2);
+	// TurnOnSingleLED(2,3,3,2);
+	// TurnOnSingleLED(2,4,3,2);
+	// TurnOnSingleLED(3,2,3,2);
+	// TurnOnSingleLED(3,3,3,2);
+	// TurnOnSingleLED(3,4,3,2);
+	// TurnOnSingleLED(4,2,3,2);
+	// TurnOnSingleLED(4,3,3,2);
+	// TurnOnSingleLED(4,4,3,2);
+	// TurnOnSingleLED(5,3,3,2);
 
 }
 
@@ -2890,6 +2891,7 @@ void Game5(){ //multi-player, least amount of wiggle game
 	int zmin;
 	int zmax;
 	int offset=125;
+	codedPosition = 0;
 	
 	while(acceljerk(x,y,z)==0 && GameState==50){
 		xbee.readPacket();
@@ -3043,16 +3045,24 @@ void Game5(){ //multi-player, least amount of wiggle game
 			i++;
 		}
 		codedPosition = ((xmax-xmin)+(ymax-ymin)+(zmax-zmin))/7;
+		if(codedPosition > 149){
+			codedPosition = 149;
+		}
 		Serial.println(codedPosition);
 		if(GameState==52){
 			GameState=53;
+		}
+		i=0;
+		while(i<25){
+			playerResults[i] = 0;
+			i++;
 		}
 	}
 	while(GameState==53){
 		xbee.readPacket();
 		if (xbee.getResponse().isAvailable()) {  // got something
 			xbee.getResponse().getRx16Response(rx16);
-			Serial.print(" got gameresult: ");
+			Serial.print(" got Game Result: ");
 			receivedGameState = (int) (rx16.getData(1)&255); 
 			receivedPlayerID = (int) (rx16.getData(0)&255); 
 			Serial.print(receivedGameState);
@@ -3063,7 +3073,7 @@ void Game5(){ //multi-player, least amount of wiggle game
 			i=0;
 			while(i<playerCount){
 				if(playerList[i]==receivedPlayerID){
-					playerResults[i]=receivedGameState;
+					playerResults[i] = receivedGameState;
 				}
 				i++;
 			}
@@ -3087,7 +3097,7 @@ void Game5(){ //multi-player, least amount of wiggle game
 		flag=0;
 		Serial.println("win or lose?");
 		while(i<playerCount && GameState==54){
-			if(codedPosition>playerResults[i]){
+			if(codedPosition>(playerResults[i])){
 				GameState=55; //you've lost
 				LoseGame();
 				flag=1;
@@ -3700,19 +3710,21 @@ void Game1(){ //2 player, chase
 			topPosition(player);
 			TurnOnSingleLED(player[0],player[1],player[2],1);
 			displayLEDs(LEDs);
-			TurnOnSingleLED(1,2,3,2);
-			TurnOnSingleLED(1,3,3,2);
-			TurnOnSingleLED(1,4,3,2);
-			TurnOnSingleLED(2,2,3,2);
-			TurnOnSingleLED(2,3,3,2);
-			TurnOnSingleLED(2,4,3,2);
-			TurnOnSingleLED(3,2,3,2);
-			TurnOnSingleLED(3,3,3,2);
-			TurnOnSingleLED(3,4,3,2);
-			TurnOnSingleLED(4,2,3,2);
-			TurnOnSingleLED(4,3,3,2);
-			TurnOnSingleLED(4,4,3,2);
-			TurnOnSingleLED(5,3,3,2);
+			TurnOnRow(4,1,2);
+			TurnOnRow(2,1,2);
+			// TurnOnSingleLED(1,2,3,2);
+			// TurnOnSingleLED(1,3,3,2);
+			// TurnOnSingleLED(1,4,3,2);
+			// TurnOnSingleLED(2,2,3,2);
+			// TurnOnSingleLED(2,3,3,2);
+			// TurnOnSingleLED(2,4,3,2);
+			// TurnOnSingleLED(3,2,3,2);
+			// TurnOnSingleLED(3,3,3,2);
+			// TurnOnSingleLED(3,4,3,2);
+			// TurnOnSingleLED(4,2,3,2);
+			// TurnOnSingleLED(4,3,3,2);
+			// TurnOnSingleLED(4,4,3,2);
+			// TurnOnSingleLED(5,3,3,2);
 		}
 		if(GameState==11){
 			FriendedTone();
@@ -3735,19 +3747,21 @@ void Game1(){ //2 player, chase
 			TurnOnSingleLED(player[0],player[1],player[2],1);
 			transmitGameState();
 			displayLEDs(LEDs);
-			TurnOnSingleLED(1,2,3,2);
-			TurnOnSingleLED(1,3,3,2);
-			TurnOnSingleLED(1,4,3,2);
-			TurnOnSingleLED(2,2,3,2);
-			TurnOnSingleLED(2,3,3,2);
-			TurnOnSingleLED(2,4,3,2);
-			TurnOnSingleLED(3,2,3,2);
-			TurnOnSingleLED(3,3,3,2);
-			TurnOnSingleLED(3,4,3,2);
-			TurnOnSingleLED(4,2,3,2);
-			TurnOnSingleLED(4,3,3,2);
-			TurnOnSingleLED(4,4,3,2);
-			TurnOnSingleLED(5,3,3,2);
+			TurnOnRow(4,1,2);
+			TurnOnRow(2,1,2);
+			// TurnOnSingleLED(1,2,3,2);
+			// TurnOnSingleLED(1,3,3,2);
+			// TurnOnSingleLED(1,4,3,2);
+			// TurnOnSingleLED(2,2,3,2);
+			// TurnOnSingleLED(2,3,3,2);
+			// TurnOnSingleLED(2,4,3,2);
+			// TurnOnSingleLED(3,2,3,2);
+			// TurnOnSingleLED(3,3,3,2);
+			// TurnOnSingleLED(3,4,3,2);
+			// TurnOnSingleLED(4,2,3,2);
+			// TurnOnSingleLED(4,3,3,2);
+			// TurnOnSingleLED(4,4,3,2);
+			// TurnOnSingleLED(5,3,3,2);
 		}
 		while(GameState==11||GameState==12){ //13=lose, 14=win
 			i++;
@@ -3831,9 +3845,9 @@ void Game1(){ //2 player, chase
 					i++;
 				}
 				WinGame();
-			}else if(player[0]==1||player[0]==2||player[0]==3||player[0]==4){
-				if(player[1]==2||player[1]==3||player[1]==4){
-					if(player[2]==3){
+			}else if(player[0]==4||player[0]==2){
+				// if(player[1]==2||player[1]==3||player[1]==4){
+					if(player[2]==1){
 						GameState = 13; //you've lost
 						i=0;
 						while(i<40){
@@ -3843,30 +3857,32 @@ void Game1(){ //2 player, chase
 						}
 						LoseGame();
 					}
-				}
-			}else if(player[0]==5 && player[1]==3 && player[2]==3){
-				GameState = 13; //you've lost
-				i=0;
-				while(i<40){
-					transmitGameState();
-					displayLEDs(LEDs);
-					i++;
-				}
-				LoseGame();
-			}
-			TurnOnSingleLED(1,2,3,2);
-			TurnOnSingleLED(1,3,3,2);
-			TurnOnSingleLED(1,4,3,2);
-			TurnOnSingleLED(2,2,3,2);
-			TurnOnSingleLED(2,3,3,2);
-			TurnOnSingleLED(2,4,3,2);
-			TurnOnSingleLED(3,2,3,2);
-			TurnOnSingleLED(3,3,3,2);
-			TurnOnSingleLED(3,4,3,2);
-			TurnOnSingleLED(4,2,3,2);
-			TurnOnSingleLED(4,3,3,2);
-			TurnOnSingleLED(4,4,3,2);
-			TurnOnSingleLED(5,3,3,2);
+				// }
+			} //else if(player[0]==5 && player[1]==3 && player[2]==3){
+				// GameState = 13; //you've lost
+				// i=0;
+				// while(i<40){
+					// transmitGameState();
+					// displayLEDs(LEDs);
+					// i++;
+				// }
+				// LoseGame();
+			// }
+			TurnOnRow(4,1,2);
+			TurnOnRow(2,1,2);
+			// TurnOnSingleLED(1,2,3,2);
+			// TurnOnSingleLED(1,3,3,2);
+			// TurnOnSingleLED(1,4,3,2);
+			// TurnOnSingleLED(2,2,3,2);
+			// TurnOnSingleLED(2,3,3,2);
+			// TurnOnSingleLED(2,4,3,2);
+			// TurnOnSingleLED(3,2,3,2);
+			// TurnOnSingleLED(3,3,3,2);
+			// TurnOnSingleLED(3,4,3,2);
+			// TurnOnSingleLED(4,2,3,2);
+			// TurnOnSingleLED(4,3,3,2);
+			// TurnOnSingleLED(4,4,3,2);
+			// TurnOnSingleLED(5,3,3,2);
 		}
 		
 	}
